@@ -4,12 +4,12 @@
   "description": "Generates Versions based on git information",
   "repository": {
     "type": "git",
-    "url": "git@wellsite.github.com:Wellsite-Navigator/version-generator.git"
+    "url": "https://github.com/Wellsite-Navigator/version-generator.git"
   },
   "homepage": "https://github.com/Wellsite-Navigator/version-generator",
   "license": "MIT",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "files": [
     "dist",
     "action.yml",
@@ -26,6 +26,9 @@
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .coverage"
   },
   "packageManager": "pnpm@10.6.2",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "version",
     "generator",

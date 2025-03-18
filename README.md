@@ -132,6 +132,10 @@ If you encounter an error related to getting the commit count, make sure your re
 
 For more information on developing and contributing to this project, see [DEVELOPMENT.md](./DEVELOPMENT.md).
 
+## Publishing
+
+For detailed instructions on publishing this package to npm and using it as a GitHub Action, see [PUBLISHING.md](./PUBLISHING.md).
+
 ## License
 
 MIT
