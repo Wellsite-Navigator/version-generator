@@ -1,17 +1,23 @@
 name: Publish Package
 
 on:
+  push:
+    branches:
+      - main
   release:
     types: [created]
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Needed for pushing tags
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -23,6 +29,18 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 10.6.2
+          
+      - name: Check for tags and create if needed
+        run: |
+          # Check if there are any tags
+          if [ -z "$(git tag -l)" ]; then
+            echo "No tags found, creating initial tag v0.1.0"
+            git config --global user.name "GitHub Actions"
+            git config --global user.email "actions@github.com"
+            git tag -a v0.1.0 -m "Initial tag for version generation"
+          else
+            echo "Tags exist, no need to create one"
+          fi
 
       - name: Install dependencies
         run: pnpm install
@@ -32,8 +50,60 @@ jobs:
 
       - name: Test
         run: pnpm test
+        
+      - name: Generate version
+        id: generate-version
+        run: |
+          # Install the CLI globally
+          pnpm add -g ./
+          
+          # Generate version using the CLI with JSON output
+          VERSION_INFO=$(generate-version --root-dir . --format json)
+          echo "Generated version info: $VERSION_INFO"
+          
+          # Extract components from JSON
+          VERSION=$(echo "$VERSION_INFO" | jq -r '.version')
+          MAJOR=$(echo "$VERSION_INFO" | jq -r '.major')
+          MINOR=$(echo "$VERSION_INFO" | jq -r '.minor')
+          PATCH=$(echo "$VERSION_INFO" | jq -r '.patch')
+          BRANCH=$(echo "$VERSION_INFO" | jq -r '.branchName')
+          COMMIT=$(echo "$VERSION_INFO" | jq -r '.commitHash')
+          
+          # Set outputs for use in later steps
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "minor=$MINOR" >> $GITHUB_OUTPUT
+          echo "patch=$PATCH" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
+          
+      - name: Update package.json version
+        run: |
+          # Use jq to update the version in package.json
+          jq ".version = \"${{ steps.generate-version.outputs.version }}\"" package.json > package.json.tmp
+          mv package.json.tmp package.json
+          echo "Updated package.json version to ${{ steps.generate-version.outputs.version }}"
 
       - name: Publish to npm registry
-        run: pnpm publish --access public
+        run: pnpm publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # This is required for pnpm to authenticate with the npm registry
+          
+      - name: Update major version tag
+        run: |
+          # Use the major version extracted from the version info
+          MAJOR_VERSION="v${{ steps.generate-version.outputs.major }}"
+          echo "Updating major version tag: $MAJOR_VERSION"
+          
+          # Configure git
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          # Create or force-update the tag to point to the current commit
+          # The -f flag forces the update if the tag already exists
+          echo "Creating or updating tag $MAJOR_VERSION"
+          git tag -fa $MAJOR_VERSION -m "Latest release of major version $MAJOR_VERSION"
+          
+          # Push the tag with a special header to prevent triggering other workflows
+          # The -o flag adds a custom header to the push request
+          git push -f -o ci.skip origin $MAJOR_VERSION

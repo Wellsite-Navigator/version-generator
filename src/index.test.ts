@@ -103,8 +103,18 @@ describe('Version Generator', () => {
         getGitHubData: jest.fn(),
       };
 
+      // Create a mock VersionInfo object
+      const versionInfo: index.VersionInfo = {
+        major: '1',
+        minor: '0',
+        patch: 0,
+        branchName: 'main',
+        commitHash: 'abc123',
+        version: version
+      };
+
       // Execute
-      index.writeVersionToFile(version, filePath, { executor: realExecutor });
+      index.writeVersionToFile(versionInfo, filePath, { executor: realExecutor });
 
       // Verify
       expect(fs.existsSync(nestedDir)).toBe(true); // Directory was created
@@ -112,7 +122,7 @@ describe('Version Generator', () => {
 
       // Read the file and verify its contents
       const fileContent = fs.readFileSync(filePath, 'utf-8');
-      expect(JSON.parse(fileContent)).toEqual({ version });
+      expect(JSON.parse(fileContent)).toEqual(versionInfo);
     });
   });
 
@@ -120,7 +130,12 @@ describe('Version Generator', () => {
     it('should return the git tag when available', async () => {
       // Setup
       const mockTagExecutor: index.Executor = {
-        execCommand: jest.fn().mockReturnValue('v1.2'),
+        execCommand: jest.fn().mockImplementation((command) => {
+          if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
+            return 'v1.2\nv1.1\nv1.0';
+          }
+          throw new Error(`Unexpected command: ${command}`);
+        }),
         fileExists: jest.fn(),
         readFile: jest.fn(),
         writeFile: jest.fn(),
@@ -133,13 +148,18 @@ describe('Version Generator', () => {
 
       // Verify
       expect(result).toBe('v1.2');
-      expect(mockTagExecutor.execCommand).toHaveBeenCalledWith('git describe --tags --abbrev=0');
+      expect(mockTagExecutor.execCommand).toHaveBeenCalledWith('git tag --list "v*.*" --sort=-creatordate --merged HEAD');
     });
 
-    it('should return tag v0.0.0 when using a mock executor that returns it', async () => {
+    it('should return tag v0.0 when using a mock executor that returns it', async () => {
       // Setup
       const mockExecutor: index.Executor = {
-        execCommand: jest.fn().mockReturnValue('v0.0.0'),
+        execCommand: jest.fn().mockImplementation((command) => {
+          if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
+            return 'v0.0';
+          }
+          throw new Error(`Unexpected command: ${command}`);
+        }),
         fileExists: jest.fn(),
         readFile: jest.fn(),
         writeFile: jest.fn(),
@@ -151,8 +171,52 @@ describe('Version Generator', () => {
       const result = await index.getLatestTag({ executor: mockExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' }});
 
       // Verify
-      expect(result).toBe('v0.0.0');
-      expect(mockExecutor.execCommand).toHaveBeenCalledWith('git describe --tags --abbrev=0');
+      expect(result).toBe('v0.0');
+      expect(mockExecutor.execCommand).toHaveBeenCalledWith('git tag --list "v*.*" --sort=-creatordate --merged HEAD');
+    });
+
+    it('should reject when no tags match the v*.* pattern', async () => {
+      // Setup
+      const mockNoTagsExecutor: index.Executor = {
+        execCommand: jest.fn().mockImplementation((command) => {
+          if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
+            return ''; // No tags matching v*.* pattern
+          }
+          throw new Error(`Unexpected command: ${command}`);
+        }),
+        fileExists: jest.fn(),
+        readFile: jest.fn(),
+        writeFile: jest.fn(),
+        mkdirSync: jest.fn(),
+        getGitHubData: jest.fn(),
+      };
+
+      // Execute and verify
+      await expect(
+        index.getLatestTag({ executor: mockNoTagsExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' }})
+      ).rejects.toThrow("No tags matching v*.* pattern found in repository ancestry");
+    });
+
+    it('should reject when tags match v*.* pattern but not vX.Y format', async () => {
+      // Setup
+      const mockInvalidFormatExecutor: index.Executor = {
+        execCommand: jest.fn().mockImplementation((command) => {
+          if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
+            return 'v1.2.3\nv2.3.4'; // Tags with patch version, not matching vX.Y format
+          }
+          throw new Error(`Unexpected command: ${command}`);
+        }),
+        fileExists: jest.fn(),
+        readFile: jest.fn(),
+        writeFile: jest.fn(),
+        mkdirSync: jest.fn(),
+        getGitHubData: jest.fn(),
+      };
+
+      // Execute and verify
+      await expect(
+        index.getLatestTag({ executor: mockInvalidFormatExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' }})
+      ).rejects.toThrow("No tags matching the required format vX.Y found in repository ancestry");
     });
 
     it('should throw an error when git command fails', async () => {
@@ -405,7 +469,7 @@ describe('getLatestTag with GitHub API', () => {
     ).rejects.toThrow('No tags found in repository');
   });
 
-  it('should throw an error if no tags starting with v are found in GitHub API response', async () => {
+  it('should throw an error if no tags matching vX.Y format are found in GitHub API response', async () => {
     // Setup
     const noVTagsExecutor: index.Executor = {
       execCommand: jest.fn(),
@@ -413,7 +477,7 @@ describe('getLatestTag with GitHub API', () => {
       readFile: jest.fn(),
       writeFile: jest.fn(),
       mkdirSync: jest.fn(),
-      getGitHubData: jest.fn().mockResolvedValue([{ name: 'release-1.0' }]),
+      getGitHubData: jest.fn().mockResolvedValue([{ name: 'release-1.0' }, { name: 'v1' }, { name: 'v1.2.3' }]),
     };
 
     // Execute and verify
@@ -426,7 +490,7 @@ describe('getLatestTag with GitHub API', () => {
           GITHUB_REPOSITORY: 'Wellsite-Navigator/wellsite-portal',
         },
       }),
-    ).rejects.toThrow('No tags starting with "v" found in repository');
+    ).rejects.toThrow('No tags matching the required format vX.Y found in repository');
   });
 });
 
@@ -653,8 +717,8 @@ describe('generatePackageVersion', () => {
     // Create a custom executor for this test
     const packageVersionExecutor: index.Executor = {
       execCommand: jest.fn().mockImplementation((command: string) => {
-        if (command === 'git describe --tags --abbrev=0') {
-          return 'v1.2';
+        if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
+          return 'v1.2\nv1.1\nv1.0';
         } else if (command === 'git rev-list v1.2..HEAD --count') {
           return '42';
         } else if (command === 'git rev-parse --abbrev-ref HEAD') {
@@ -675,18 +739,19 @@ describe('generatePackageVersion', () => {
     const result = await index.generatePackageVersion(undefined, { executor: packageVersionExecutor, env: {...process.env, GITHUB_ACTIONS: 'false'} });
 
     // Verify the result format
-    expect(result).toMatch(/^1\.2\.\d+-[\w-]+\.[\w\d]+$/);
+    expect(result).toHaveProperty('version');
+    expect(result.version).toMatch(/^1\.2\.\d+-[\w-]+\.[\w\d]+$/);
 
     // Verify that the executor was used
     expect(packageVersionExecutor.execCommand).toHaveBeenCalled();
   });
 
-  it('should throw an error if tag format is invalid', async () => {
-    // Setup - create an executor that returns an invalid tag
+  it('should throw an error if no valid tags are found', async () => {
+    // Setup - create an executor that returns no tags
     const invalidTagExecutor: Executor = {
       execCommand: jest.fn((command) => {
-        if (command === 'git describe --tags --abbrev=0') {
-          return 'invalid-tag'; // Not starting with 'v'
+        if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
+          return ''; // No tags matching v*.* pattern
         }
         return 'mock-result';
       }),
@@ -699,16 +764,16 @@ describe('generatePackageVersion', () => {
 
     // Execute & Verify
     await expect(index.generatePackageVersion(undefined, { executor: invalidTagExecutor, env: {...process.env, GITHUB_ACTIONS: 'false'}})).rejects.toThrow(
-      'Tag must start with "v"',
+      'No tags matching v*.* pattern found in repository ancestry',
     );
   });
 
-  it('should throw an error if tag does not have major and minor parts', async () => {
-    // Setup - create an executor that returns a tag without major and minor parts
-    const invalidTagExecutor: Executor = {
+  it('should throw an error if tags match v*.* pattern but not vX.Y format', async () => {
+    // Setup - create an executor that returns tags not matching vX.Y format
+    const majorVersionTagExecutor: Executor = {
       execCommand: jest.fn((command) => {
-        if (command === 'git describe --tags --abbrev=0') {
-          return 'v1'; // Missing minor version
+        if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
+          return 'v1.2.3\nv2.3.4'; // Tags with patch version, not matching vX.Y format
         }
         return 'mock-result';
       }),
@@ -720,8 +785,8 @@ describe('generatePackageVersion', () => {
     };
 
     // Execute & Verify
-    await expect(index.generatePackageVersion(undefined, { executor: invalidTagExecutor, env: {...process.env, GITHUB_ACTIONS: 'false'} })).rejects.toThrow(
-      'Invalid tag format. Expected v<major>.<minor>',
+    await expect(index.generatePackageVersion(undefined, { executor: majorVersionTagExecutor, env: {...process.env, GITHUB_ACTIONS: 'false'} })).rejects.toThrow(
+      'No tags matching the required format vX.Y found in repository ancestry',
     );
   });
 
@@ -734,8 +799,8 @@ describe('generatePackageVersion', () => {
       mkdirSync: jest.fn(),
       getGitHubData: jest.fn(),
       execCommand: jest.fn().mockImplementation((command: string) => {
-        if (command === 'git describe --tags --abbrev=0') {
-          return 'v1.2';
+        if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
+          return 'v1.2\nv1.1\nv1.0';
         } else if (command === 'git rev-list v1.2..HEAD --count') {
           return '42';
         } else {
@@ -756,7 +821,8 @@ describe('generatePackageVersion', () => {
     });
 
     // Verify
-    expect(result).toMatch(/^1\.2\.\d+-feature-env-branch\.12345678$/);
+    expect(result).toHaveProperty('version');
+    expect(result.version).toMatch(/^1\.2\.\d+-feature-env-branch\.12345678$/);
   });
 
   // Removed test for allowTestFallback as it's no longer needed with the executor pattern
@@ -774,8 +840,8 @@ describe('generateAndWriteVersion', () => {
     // Create a real executor that uses the file system
     const realExecutor: index.Executor = {
       execCommand: jest.fn().mockImplementation((command) => {
-        if (command === 'git describe --tags --abbrev=0') {
-          return 'v1.2.3'; // Mock git tag command
+        if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
+          return 'v1.2'; // Mock git tag command
         } else if (command === 'git rev-parse --abbrev-ref HEAD') {
           return 'main'; // Mock git branch command
         } else if (command === 'git rev-parse --short=8 HEAD') {
@@ -801,7 +867,17 @@ describe('generateAndWriteVersion', () => {
 
     // Verify
     expect(result).toHaveProperty('version');
+    expect(result).toHaveProperty('major');
+    expect(result).toHaveProperty('minor');
+    expect(result).toHaveProperty('patch');
+    expect(result).toHaveProperty('branchName');
+    expect(result).toHaveProperty('commitHash');
     expect(typeof result.version).toBe('string');
+    expect(typeof result.major).toBe('string');
+    expect(typeof result.minor).toBe('string');
+    expect(typeof result.patch).toBe('number');
+    expect(typeof result.branchName).toBe('string');
+    expect(typeof result.commitHash).toBe('string');
 
     // Check that no files were created in the temp directory
     // Create a unique temporary directory for this test
@@ -822,8 +898,8 @@ describe('generateAndWriteVersion', () => {
     // Create a real executor that uses the file system
     const realExecutor: index.Executor = {
       execCommand: jest.fn().mockImplementation((command) => {
-        if (command === 'git describe --tags --abbrev=0') {
-          return 'v1.2.3'; // Mock git tag command
+        if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
+          return 'v1.2'; // Mock git tag command
         } else if (command === 'git rev-parse --abbrev-ref HEAD') {
           return 'main'; // Mock git branch command
         } else if (command === 'git rev-parse --short=8 HEAD') {
@@ -849,7 +925,17 @@ describe('generateAndWriteVersion', () => {
 
     // Verify
     expect(result).toHaveProperty('version');
+    expect(result).toHaveProperty('major');
+    expect(result).toHaveProperty('minor');
+    expect(result).toHaveProperty('patch');
+    expect(result).toHaveProperty('branchName');
+    expect(result).toHaveProperty('commitHash');
     expect(typeof result.version).toBe('string');
+    expect(typeof result.major).toBe('string');
+    expect(typeof result.minor).toBe('string');
+    expect(typeof result.patch).toBe('number');
+    expect(typeof result.branchName).toBe('string');
+    expect(typeof result.commitHash).toBe('string');
 
     // Check that the file was created
     expect(fs.existsSync(expectedFilePath)).toBe(true);
@@ -858,7 +944,17 @@ describe('generateAndWriteVersion', () => {
     const fileContent = fs.readFileSync(expectedFilePath, 'utf-8');
     const parsedContent = JSON.parse(fileContent);
     expect(parsedContent).toHaveProperty('version');
+    expect(parsedContent).toHaveProperty('major');
+    expect(parsedContent).toHaveProperty('minor');
+    expect(parsedContent).toHaveProperty('patch');
+    expect(parsedContent).toHaveProperty('branchName');
+    expect(parsedContent).toHaveProperty('commitHash');
     expect(parsedContent.version).toBe(result.version);
+    expect(parsedContent.major).toBe(result.major);
+    expect(parsedContent.minor).toBe(result.minor);
+    expect(parsedContent.patch).toBe(result.patch);
+    expect(parsedContent.branchName).toBe(result.branchName);
+    expect(parsedContent.commitHash).toBe(result.commitHash);
   });
 
   it('should pass the executor to dependent functions', async () => {

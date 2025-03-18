@@ -100,11 +100,20 @@ async function getLatestTagFromGitHub(
       throw new Error('No tags found in repository');
     }
 
-    // Find the latest tag that starts with 'v'
-    const vTags = response.filter((tag: any) => typeof tag.name === 'string' && tag.name.startsWith('v'));
+    // First find all tags that start with 'v'
+    const allVTags = response.filter((tag: any) => typeof tag.name === 'string' && tag.name.startsWith('v'));
+    
+    if (allVTags.length === 0) {
+      throw new Error('No tags starting with "v" found in repository');
+    }
+    
+    // Then filter to only include tags that match the format vX.Y (e.g., v1.2)
+    // This ensures we only consider proper version tags and ignore major version references like v1
+    const versionTagRegex = /^v\d+\.\d+$/;
+    const vTags = allVTags.filter((tag: any) => versionTagRegex.test(tag.name));
 
     if (vTags.length === 0) {
-      throw new Error('No tags starting with "v" found in repository');
+      throw new Error('No tags matching the required format vX.Y found in repository');
     }
 
     return vTags[0].name;
@@ -135,7 +144,26 @@ export async function getLatestTag(options: { executor?: Executor; env?: EnvVars
   }
 
   try {
-    return executor.execCommand('git describe --tags --abbrev=0');
+    // Get tags matching v*.* pattern in our ancestry and sort by creation date (newest first)
+    // This will find tags like v1.2, v2.3, etc. but not v1, v2, etc.
+    const vTags = executor.execCommand('git tag --list "v*.*" --sort=-creatordate --merged HEAD').split('\n').filter(Boolean);
+    
+    if (vTags.length === 0) {
+      throw new Error('No tags matching v*.* pattern found in repository ancestry');
+    }
+    
+    // Further filter tags to match the exact vX.Y format (e.g., v1.2)
+    const versionTagRegex = /^v\d+\.\d+$/;
+    const versionTags = vTags
+      .filter(tag => versionTagRegex.test(tag.trim()));
+    
+    // No need to sort as Git already sorted by creation date (newest first)
+    
+    if (versionTags.length === 0) {
+      throw new Error('No tags matching the required format vX.Y found in repository ancestry');
+    }
+    
+    return versionTags[0];
   } catch (error: unknown) {
     throw new Error(`No git tags found ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -275,17 +303,29 @@ export function cleanBranchName(branchName: string): string {
 }
 
 /**
- * Generates a version string based on git information
+ * Version information object containing all components
+ */
+export interface VersionInfo {
+  major: string;
+  minor: string;
+  patch: number;
+  branchName: string;
+  commitHash: string;
+  version: string;
+}
+
+/**
+ * Generates version information based on git information
  *
  * @param rootDir - Optional root directory
  * @param options - Options for version generation
  * @param options.executor - Custom executor for dependency injection
- * @returns Promise resolving to the generated version string
+ * @returns Promise resolving to the version information object
  */
 export async function generatePackageVersion(
   rootDir?: string,
   options: { executor?: Executor; env?: EnvVars } = {},
-): Promise<string> {
+): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
   const env = options.env || (process.env as EnvVars);
 
@@ -311,26 +351,36 @@ export async function generatePackageVersion(
   const commitHash = getShortCommitHash({ executor, env });
 
   // Generate version string in npm semver compatible format
-  return `${major}.${minor}.${patch}-${branchName}.${commitHash}`;
+  const version = `${major}.${minor}.${patch}-${branchName}.${commitHash}`;
+  
+  // Return the complete version info object
+  return {
+    major,
+    minor,
+    patch,
+    branchName,
+    commitHash,
+    version
+  };
 }
 
 /**
  * Writes the generated version to a file
  *
- * @param version - The version string to write
+ * @param versionInfo - The version information to write
  * @param filePath - The path to write the version file to
  * @param options - Options for writing the version file
  * @param options.executor - Custom executor for dependency injection
  * @param options.env - Environment variables for dependency injection
  */
 export function writeVersionToFile(
-  version: string,
+  versionInfo: VersionInfo,
   filePath: string,
   options: { executor?: Executor; env?: EnvVars } = {},
 ): void {
   const executor = options.executor || defaultExecutor;
   // We don't currently use env in this function, but include it for consistency
-  const fileContent = JSON.stringify({ version }, null, 2);
+  const fileContent = JSON.stringify(versionInfo, null, 2);
 
   // Create directory if it doesn't exist
   executor.mkdirSync(dirname(filePath), { recursive: true });
@@ -339,37 +389,35 @@ export function writeVersionToFile(
 }
 
 /**
- * Generates a version string and optionally writes it to the specified destination as a JSON object
- * with 'version' as the key
+ * Generates version information and optionally writes it to the specified destination as a JSON object
  *
  * @param rootDir - The root directory of the monorepo
  * @param destination - Optional destination path relative to rootDir where the version file should be written
  * @param options - Options for generating and writing the version
  * @param options.executor - Custom executor for dependency injection
  * @param options.env - Environment variables for dependency injection
- * @returns Promise resolving to an object with the version string
+ * @returns Promise resolving to the version information object
  */
 export async function generateAndWriteVersion(
   rootDir: string,
   destination?: string,
   options: { executor?: Executor; env?: EnvVars } = {},
-): Promise<{ version: string }> {
+): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
   const env = options.env || (process.env as EnvVars);
 
-  const version = await generatePackageVersion(rootDir, {
+  const versionInfo = await generatePackageVersion(rootDir, {
     executor,
     env,
   });
-  const versionObject = { version };
 
   // If a destination is provided, write the version to that location as a JSON object
   if (destination) {
     const versionFilePath = join(rootDir, destination);
 
     // Write the version file
-    writeVersionToFile(version, versionFilePath, { executor });
+    writeVersionToFile(versionInfo, versionFilePath, { executor });
   }
 
-  return versionObject;
+  return versionInfo;
 }

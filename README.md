@@ -136,6 +136,23 @@ For more information on developing and contributing to this project, see [DEVELO
 
 For detailed instructions on publishing this package to npm and using it as a GitHub Action, see [PUBLISHING.md](./PUBLISHING.md).
 
+### Versioning
+
+This project uses a combination of tags and branches for versioning:
+
+1. **Specific version tags** (e.g., `v1.0`, `v2.3`): Mark actual releases and are used for calculating the patch number (commits since last tag)
+   > **Important**: The version generator will only consider tags in the exact format `vX.Y` (e.g., `v1.2`) for version calculations. Tags like `v1` (major version only) or `v1.2.3` (with patch version) will be ignored. This allows major version branches (`v1`, `v2`) to coexist with version tags without interfering with version calculations.
+2. **Detailed versions** for npm packages: `v1.2.3-branch-commithash` format, generated automatically from git information
+3. **Major version branches** (e.g., `v1`, `v2`): Always point to the latest release in that major version
+
+This allows users to reference the action with a simple major version reference while still getting detailed version information in the npm package:
+
+```yaml
+uses: Wellsite-Navigator/version-generator@v1  # Uses the latest v1.x.x release via the v1 branch
+```
+
+Using branches for major versions instead of tags ensures that our patch versioning (which counts commits since the last tag) remains accurate, as the specific version tags are only created for actual releases.
+
 ## License
 
 MIT

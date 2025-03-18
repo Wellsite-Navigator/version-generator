@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { generateAndWriteVersion } from '.';
+import { generateAndWriteVersion, VersionInfo } from '.';
 import { resolve } from 'path';
 
 /**
@@ -15,7 +15,7 @@ export async function runVersionGenerator(
   rootDir: string,
   destination?: string,
   format: string = 'string',
-): Promise<{ version: string }> {
+): Promise<VersionInfo> {
   // Resolve the root directory to an absolute path
   const resolvedRootDir = resolve(rootDir);
   const normalizedFormat = format.toLowerCase();
@@ -26,22 +26,22 @@ export async function runVersionGenerator(
   }
 
   // Generate the version
-  const versionData = await generateAndWriteVersion(resolvedRootDir, destination);
+  const versionInfo = await generateAndWriteVersion(resolvedRootDir, destination);
 
   // Output based on format and destination
   if (!destination) {
     // No destination - output based on format
     if (normalizedFormat === 'string') {
-      console.log(versionData.version);
+      console.log(versionInfo.version);
     } else {
-      console.log(JSON.stringify(versionData, null, 2));
+      console.log(JSON.stringify(versionInfo, null, 2));
     }
   } else {
     // Destination provided - output additional information
-    console.log(`Successfully generated version: ${versionData.version}`);
+    console.log(`Successfully generated version: ${versionInfo.version}`);
   }
 
-  return versionData;
+  return versionInfo;
 }
 
 // Only run the CLI if this file is executed directly

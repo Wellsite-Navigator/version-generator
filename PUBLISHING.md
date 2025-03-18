@@ -74,11 +74,48 @@ Once published, the action can be used in GitHub workflows in two ways:
 
 ## Version Management
 
-When releasing a new version:
+### Versioning Strategy
 
-1. Update the version in `package.json`
-2. Create a new tag and release on GitHub
-3. The GitHub Actions workflow will publish the new version to npm
+This project uses a combination of:
+
+1. **Specific version tags** (e.g., `v1.0`, `v2.3`) for marking releases
+2. **Detailed version strings** for npm packages
+3. **Major version branches** for GitHub Actions references
+
+### Specific Version Tags
+
+When a release is created, a specific version tag in the format `vX.Y` (e.g., `v1.0`, `v2.3`) is created to mark that release. These tags are used to:
+
+1. Mark official releases
+2. Calculate the patch number (number of commits since the last tag)
+3. Provide a reference point for version history
+
+> **Important**: The version generator will only consider tags in the exact format `vX.Y` (e.g., `v1.2`) for version calculations. Tags like `v1` (major version only) or `v1.2.3` (with patch version) will be ignored. This allows major version branches (`v1`, `v2`) to coexist with version tags without interfering with version calculations.
+
+### Automatic Versioning
+
+The package uses its own version generator to create version numbers based on git information:
+
+1. When a GitHub Release is created, the publish workflow runs
+2. The workflow uses the CLI to generate a version based on git tags and commits
+3. This version is used to update package.json before publishing
+4. A major version branch (e.g., `v1`) is automatically created/updated to point to the latest release
+
+### Major Version Branches
+
+For GitHub Actions, users reference the action using major version branches:
+
+```yaml
+uses: Wellsite-Navigator/version-generator@v1  # Always uses the latest v1.x.x release
+```
+
+These major version branches are automatically maintained by the publish workflow, which:
+
+1. Extracts the major version from the generated detailed version
+2. Creates or updates the major version branch to point to the current commit
+3. Force pushes the branch to the repository
+
+This approach allows users to reference a stable major version while still getting all the detailed version information in the npm package. Using branches instead of tags for major versions ensures that our patch versioning (which counts commits since the last tag) remains accurate.
 
 ## Troubleshooting
 

@@ -3,7 +3,14 @@ import { runVersionGenerator } from './cli';
 
 // Mock the index module
 jest.mock('./index', () => ({
-  generateAndWriteVersion: jest.fn().mockResolvedValue({ version: '1.2.3-test-abc123' }),
+  generateAndWriteVersion: jest.fn().mockResolvedValue({
+    major: '1',
+    minor: '2',
+    patch: 3,
+    branchName: 'test',
+    commitHash: 'abc123',
+    version: '1.2.3-test-abc123'
+  }),
 }));
 
 // Mock console.log and console.error
@@ -26,7 +33,14 @@ describe('CLI', () => {
 
     // Verify
     expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', undefined);
-    expect(result).toEqual({ version: '1.2.3-test-abc123' });
+    expect(result).toEqual({
+      major: '1',
+      minor: '2',
+      patch: 3,
+      branchName: 'test',
+      commitHash: 'abc123',
+      version: '1.2.3-test-abc123'
+    });
     expect(mockConsoleLog).toHaveBeenCalledWith('1.2.3-test-abc123');
   });
 
@@ -36,8 +50,16 @@ describe('CLI', () => {
 
     // Verify
     expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', undefined);
-    expect(result).toEqual({ version: '1.2.3-test-abc123' });
-    expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify({ version: '1.2.3-test-abc123' }, null, 2));
+    const expectedVersionInfo = {
+      major: '1',
+      minor: '2',
+      patch: 3,
+      branchName: 'test',
+      commitHash: 'abc123',
+      version: '1.2.3-test-abc123'
+    };
+    expect(result).toEqual(expectedVersionInfo);
+    expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(expectedVersionInfo, null, 2));
   });
 
   it('should generate version and write to destination when provided', async () => {
@@ -46,7 +68,14 @@ describe('CLI', () => {
 
     // Verify
     expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', 'path/to/version.json');
-    expect(result).toEqual({ version: '1.2.3-test-abc123' });
+    expect(result).toEqual({
+      major: '1',
+      minor: '2',
+      patch: 3,
+      branchName: 'test',
+      commitHash: 'abc123',
+      version: '1.2.3-test-abc123'
+    });
     expect(mockConsoleLog).toHaveBeenCalledWith('Successfully generated version: 1.2.3-test-abc123');
   });
 
