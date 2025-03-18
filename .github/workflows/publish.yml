@@ -54,20 +54,17 @@ jobs:
       - name: Generate version
         id: generate-version
         run: |
-          # Install the CLI globally
-          pnpm add -g ./
-          
-          # Generate version using the CLI with JSON output
-          VERSION_INFO=$(generate-version --root-dir . --format json)
-          echo "Generated version info: $VERSION_INFO"
+          # Run the CLI directly from the dist directory
+          node dist/cli.js --root-dir . --format json > version_info.json
+          cat version_info.json
           
           # Extract components from JSON
-          VERSION=$(echo "$VERSION_INFO" | jq -r '.version')
-          MAJOR=$(echo "$VERSION_INFO" | jq -r '.major')
-          MINOR=$(echo "$VERSION_INFO" | jq -r '.minor')
-          PATCH=$(echo "$VERSION_INFO" | jq -r '.patch')
-          BRANCH=$(echo "$VERSION_INFO" | jq -r '.branchName')
-          COMMIT=$(echo "$VERSION_INFO" | jq -r '.commitHash')
+          VERSION=$(jq -r '.version' version_info.json)
+          MAJOR=$(jq -r '.major' version_info.json)
+          MINOR=$(jq -r '.minor' version_info.json)
+          PATCH=$(jq -r '.patch' version_info.json)
+          BRANCH=$(jq -r '.branchName' version_info.json)
+          COMMIT=$(jq -r '.commitHash' version_info.json)
           
           # Set outputs for use in later steps
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -77,33 +74,41 @@ jobs:
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
           echo "commit=$COMMIT" >> $GITHUB_OUTPUT
           
-      - name: Update package.json version
+      - name: Prepare for publishing
         run: |
-          # Use jq to update the version in package.json
-          jq ".version = \"${{ steps.generate-version.outputs.version }}\"" package.json > package.json.tmp
-          mv package.json.tmp package.json
-          echo "Updated package.json version to ${{ steps.generate-version.outputs.version }}"
+          # Update only the dist/package.json version for publishing
+          echo "Updating dist/package.json version to ${{ steps.generate-version.outputs.version }}"
+          jq ".version = \"${{ steps.generate-version.outputs.version }}\"" dist/package.json > dist/package.json.tmp
+          mv dist/package.json.tmp dist/package.json
 
       - name: Publish to npm registry
-        run: pnpm publish --access public --no-git-checks
+        run: |
+          cd dist
+          echo "Publishing from dist directory"
+          pnpm publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # This is required for pnpm to authenticate with the npm registry
           
-      - name: Update major version tag
+      - name: Create and push major version tag
         run: |
-          # Use the major version extracted from the version info
+          # Extract major version component
           MAJOR_VERSION="v${{ steps.generate-version.outputs.major }}"
-          echo "Updating major version tag: $MAJOR_VERSION"
+          echo "Creating major version tag: $MAJOR_VERSION"
           
           # Configure git
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           
-          # Create or force-update the tag to point to the current commit
-          # The -f flag forces the update if the tag already exists
-          echo "Creating or updating tag $MAJOR_VERSION"
+          # Create or force-update the major version tag to point to the current commit
+          echo "Creating or updating major version tag $MAJOR_VERSION"
           git tag -fa $MAJOR_VERSION -m "Latest release of major version $MAJOR_VERSION"
           
-          # Push the tag with a special header to prevent triggering other workflows
-          # The -o flag adds a custom header to the push request
+          # Set the remote URL with authentication token
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
+          
+          # Push the tag
+          # The -o flag adds a custom header to the push request to prevent triggering other workflows
+          echo "Pushing major version tag"
           git push -f -o ci.skip origin $MAJOR_VERSION
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

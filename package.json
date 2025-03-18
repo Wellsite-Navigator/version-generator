@@ -22,7 +22,7 @@
   "scripts": {
     "test": "pnpm jest",
     "test:action": "act -j test-action -W .github/local-workflows/test-action.yml",
-    "build": "rm -rf dist && pnpm tsc -p tsconfig.build.json && chmod +x dist/cli.js",
+    "build": "rm -rf dist && pnpm tsc -p tsconfig.build.json && chmod +x dist/cli.js && cp package.json dist/",
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .coverage"
   },
   "packageManager": "pnpm@10.6.2",
