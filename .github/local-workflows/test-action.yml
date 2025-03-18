@@ -1,0 +1,64 @@
+name: Test GitHub Action
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-action:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      # Create a tag for testing if none exists
+      - name: Create test tag if needed
+        run: |
+          if ! git tag -l | grep -q .; then
+            echo "No tags found, creating test tag v0.0.0 for testing purposes"
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git tag -a v0.0.0 -m "Test version"
+          else
+            echo "Tags already exist, skipping test tag creation"
+          fi
+
+      - name: Test Action
+        id: version
+        uses: ./
+        with:
+          root-dir: '.'
+          destination: 'version.json'
+          format: 'json'
+
+      - name: Verify Action Output
+        run: |
+          echo "Generated version: ${{ steps.version.outputs.version }}"
+          if [ ! -f "version.json" ]; then
+            echo "Error: version.json file was not created"
+            exit 1
+          fi
+          cat version.json

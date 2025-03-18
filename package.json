@@ -6,20 +6,34 @@
     "type": "git",
     "url": "git@wellsite.github.com:Wellsite-Navigator/version-generator.git"
   },
+  "homepage": "https://github.com/Wellsite-Navigator/version-generator",
+  "license": "MIT",
   "main": "index.js",
   "types": "index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "action.yml",
+    "README.md",
+    "LICENSE"
   ],
   "bin": {
     "generate-version": "./dist/cli.js"
   },
   "scripts": {
     "test": "pnpm jest",
-    "build": "rm -rf dist && npx tsc && chmod +x dist/cli.js",
+    "test:action": "act -j test-action -W .github/local-workflows/test-action.yml",
+    "build": "rm -rf dist && pnpm tsc -p tsconfig.build.json && chmod +x dist/cli.js",
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .coverage"
   },
-  "packageManager": "pnpm@10.6.2",  
+  "packageManager": "pnpm@10.6.2",
+  "keywords": [
+    "version",
+    "generator",
+    "git",
+    "github",
+    "github-action",
+    "action"
+  ],
   "dependencies": {
     "commander": "^11.1.0",
     "glob": "^10.3.10",
@@ -30,7 +44,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.11.19",
     "jest": "^29.7.0",
-    "ts-jest": "^29.1.2"
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.8.2"
   }
-  
 }

@@ -1,0 +1,30 @@
+name: Generate Version
+
+# Note: This action requires at least one git tag to exist in your repository.
+# If no tags exist, the action will fail with an error message.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  generate-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 # works with shallow clones
+      
+      - name: Generate Version
+        id: version
+        uses: Wellsite-Navigator/version-generator@v1
+        with:
+          root-dir: '.'
+          destination: 'version.json'
+          format: 'json'
+      
+      - name: Use Version
+        run: |
+          echo "Generated version: ${{ steps.version.outputs.version }}"
+          cat version.json

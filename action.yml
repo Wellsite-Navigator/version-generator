@@ -1,0 +1,59 @@
+name: 'Version Generator'
+description: 'Generates version files based on git information'
+author: 'Wellsite Navigator'
+branding:
+  icon: 'tag'
+  color: 'orange'
+
+inputs:
+  root-dir:
+    description: 'Root directory of the repository'
+    required: true
+    default: '.'
+  destination:
+    description: 'Destination path relative to root directory where the version file should be written'
+    required: false
+  format:
+    description: 'Output format (string or json)'
+    required: false
+    default: 'string'
+
+
+outputs:
+  version:
+    description: 'The generated version string'
+    value: ${{ steps.generate-version.outputs.version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 10.6.2
+    
+    - name: Install dependencies
+      shell: bash
+      run: pnpm add -g @wellsite/version-generator
+    
+    - name: Generate version
+      id: generate-version
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.destination }}" ]; then
+          VERSION=$(generate-version --root-dir "${{ inputs.root-dir }}" --format "${{ inputs.format }}")
+        else
+          VERSION=$(generate-version --root-dir "${{ inputs.root-dir }}" --destination "${{ inputs.destination }}" --format "${{ inputs.format }}")
+        fi
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Generated version: ${VERSION}"
