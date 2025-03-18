@@ -67,19 +67,26 @@ jobs:
           
       - name: Prepare for publishing
         run: |
-          # Update only the dist/package.json version for publishing
-          echo "Updating dist/package.json version to ${{ steps.generate-version.outputs.version }}"
-          jq ".version = \"${{ steps.generate-version.outputs.version }}\"" dist/package.json > dist/package.json.tmp
-          mv dist/package.json.tmp dist/package.json
+          # Update the root package.json version
+          echo "Updating package.json version to ${{ steps.generate-version.outputs.version }}"
+          jq ".version = \"${{ steps.generate-version.outputs.version }}\"" package.json > package.json.tmp
+          mv package.json.tmp package.json
 
       - name: Publish to npm registry
         run: |
-          cd dist
-          echo "Publishing from dist directory"
+          # Publish from the root directory using the files specified in package.json
+          echo "Publishing package"
           pnpm publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # This is required for pnpm to authenticate with the npm registry
           
+      - name: Reset package.json changes
+        run: |
+          # Reset the package.json changes to avoid committing them
+          echo "Resetting package.json changes"
+          git checkout -- package.json
+          # No need to reset dist/package.json as it's not tracked by git
+
       - name: Create and push major version tag
         run: |
           # Extract major version component
