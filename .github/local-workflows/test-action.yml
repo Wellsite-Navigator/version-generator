@@ -34,18 +34,6 @@ jobs:
       - name: Test
         run: pnpm test
 
-      # Create a tag for testing if none exists
-      - name: Create test tag if needed
-        run: |
-          if ! git tag -l | grep -q .; then
-            echo "No tags found, creating test tag v0.0.0 for testing purposes"
-            git config --local user.email "action@github.com"
-            git config --local user.name "GitHub Action"
-            git tag -a v0.0.0 -m "Test version"
-          else
-            echo "Tags already exist, skipping test tag creation"
-          fi
-
       - name: Test Action
         id: version
         uses: ./

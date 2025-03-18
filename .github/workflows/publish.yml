@@ -7,6 +7,9 @@ on:
   release:
     types: [created]
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
@@ -29,18 +32,6 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 10.6.2
-          
-      - name: Check for tags and create if needed
-        run: |
-          # Check if there are any tags
-          if [ -z "$(git tag -l)" ]; then
-            echo "No tags found, creating initial tag v0.1.0"
-            git config --global user.name "GitHub Actions"
-            git config --global user.email "actions@github.com"
-            git tag -a v0.1.0 -m "Initial tag for version generation"
-          else
-            echo "Tags exist, no need to create one"
-          fi
 
       - name: Install dependencies
         run: pnpm install
@@ -110,5 +101,3 @@ jobs:
           # The -o flag adds a custom header to the push request to prevent triggering other workflows
           echo "Pushing major version tag"
           git push -f -o ci.skip origin $MAJOR_VERSION
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
