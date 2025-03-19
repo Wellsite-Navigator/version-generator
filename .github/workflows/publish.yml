@@ -76,7 +76,23 @@ jobs:
         run: |
           # Publish from the root directory using the files specified in package.json
           echo "Publishing package"
-          pnpm publish --access public --no-git-checks
+
+          # Use the branch name directly from the outputs
+          BRANCH="${{ steps.generate-version.outputs.branch }}"
+          echo "Branch name: $BRANCH"
+
+          # For main branch, publish with both 'latest' and branch-specific tags
+          if [ "$BRANCH" = "main" ]; then
+            echo "Publishing with tags: latest, main"
+            # First publish with 'latest' tag
+            pnpm publish --access public --no-git-checks --tag latest
+            # Then add the 'main' tag to the same version
+            npm dist-tag add @wellsite/version-generator@${{ steps.generate-version.outputs.version }} main
+          else
+            # For other branches, just publish with the branch name as tag
+            echo "Publishing with tag: $BRANCH"
+            pnpm publish --access public --no-git-checks --tag $BRANCH
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # This is required for pnpm to authenticate with the npm registry
           

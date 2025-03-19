@@ -23,6 +23,21 @@ outputs:
   version:
     description: 'The generated version string'
     value: ${{ steps.generate-version.outputs.version }}
+  major:
+    description: 'The major version number'
+    value: ${{ steps.generate-version.outputs.major }}
+  minor:
+    description: 'The minor version number'
+    value: ${{ steps.generate-version.outputs.minor }}
+  patch:
+    description: 'The patch version number (commit count since the last tag)'
+    value: ${{ steps.generate-version.outputs.patch }}
+  branchName:
+    description: 'The current branch name'
+    value: ${{ steps.generate-version.outputs.branchName }}
+  commitHash:
+    description: 'The current commit hash'
+    value: ${{ steps.generate-version.outputs.commitHash }}
 
 runs:
   using: 'composite'
@@ -31,29 +46,65 @@ runs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '22'
-    
+
     - name: Setup pnpm
       uses: pnpm/action-setup@v4
       with:
         version: 10.6.2
-    
+
     - name: Install dependencies
       shell: bash
       run: pnpm add -g @wellsite/version-generator
-    
+
     - name: Generate version
       id: generate-version
       shell: bash
       run: |
-        if [ -z "${{ inputs.destination }}" ]; then
-          VERSION=$(generate-version --root-dir "${{ inputs.root-dir }}" --format "${{ inputs.format }}")
-        else
-          VERSION=$(generate-version --root-dir "${{ inputs.root-dir }}" --destination "${{ inputs.destination }}" --format "${{ inputs.format }}")
+        # Always generate JSON format for parsing components
+        VERSION_JSON=$(generate-version --root-dir "${{ inputs.root-dir }}" --format json)
+
+        # If destination is specified, write the output in the desired format
+        if [ ! -z "${{ inputs.destination }}" ]; then
+          DEST_PATH="${{ inputs.root-dir }}/${{ inputs.destination }}"
+          mkdir -p "$(dirname "$DEST_PATH")"
+
+          if [ "${{ inputs.format }}" = "json" ]; then
+            # Write JSON format
+            echo "$VERSION_JSON" > "$DEST_PATH"
+          else
+            # Write string format
+            VERSION=$(echo "$VERSION_JSON" | jq -r '.version')
+            echo "$VERSION" > "$DEST_PATH"
+          fi
+
+          echo "Wrote version to $DEST_PATH in ${{ inputs.format }} format"
         fi
+
+        # Extract components from JSON
+        VERSION=$(echo "$VERSION_JSON" | jq -r '.version')
+        MAJOR=$(echo "$VERSION_JSON" | jq -r '.major')
+        MINOR=$(echo "$VERSION_JSON" | jq -r '.minor')
+        PATCH=$(echo "$VERSION_JSON" | jq -r '.patch')
+        BRANCH_NAME=$(echo "$VERSION_JSON" | jq -r '.branchName')
+        COMMIT_HASH=$(echo "$VERSION_JSON" | jq -r '.commitHash')
+
+        # Set outputs
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "major=${MAJOR}" >> $GITHUB_OUTPUT
+        echo "minor=${MINOR}" >> $GITHUB_OUTPUT
+        echo "patch=${PATCH}" >> $GITHUB_OUTPUT
+        echo "branchName=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+        echo "commitHash=${COMMIT_HASH}" >> $GITHUB_OUTPUT
+
+        # Display output
         echo "Generated version: ${VERSION}"
+        echo "Major: ${MAJOR}"
+        echo "Minor: ${MINOR}"
+        echo "Patch: ${PATCH}"
+        echo "Branch: ${BRANCH_NAME}"
+        echo "Commit: ${COMMIT_HASH}"

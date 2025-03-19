@@ -9,8 +9,8 @@ version-generator/
 ├── .github/
 │   ├── local-workflows/   # Local testing workflows (not committed to git)
 │   │   └── test-action.yml
-│   └── workflows/         # GitHub Actions workflows
-│       └── publish.yml
+│   └── workflows/         
+│       └── publish.yml    # Publish workflow
 ├── dist/                  # Compiled output (not committed to git)
 ├── examples/              # Example workflows for users
 ├── src/                   # Source code
@@ -60,13 +60,23 @@ pnpm test
 
 ### Testing the GitHub Action Locally
 
-To test the GitHub Action locally, you can use [act](https://github.com/nektos/act):
+To test the GitHub Action locally before publishing, you can use [act](https://github.com/nektos/act) with the provided local workflow:
 
 ```bash
 # Install act
 brew install act
 
-# Run the test workflow
+# Clone the repository (if you haven't already)
+git clone <repository-url>
+cd version-generator
+
+# Install dependencies
+pnpm install
+
+# Build the package
+pnpm build
+
+# Run the local test workflow
 act -j test-action -W .github/local-workflows/test-action.yml
 ```
 
@@ -89,7 +99,7 @@ generate-version --root-dir . --format json
 
 ### Publishing to npm Registry
 
-The package is automatically published to the npm registry when a new release is created on GitHub. The publish workflow is defined in `.github/workflows/publish.yml`.
+The package is automatically published to the npm registry on every push. The publish workflow is defined in `.github/workflows/publish.yml`.
 
 To publish manually:
 

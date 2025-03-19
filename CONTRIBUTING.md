@@ -42,7 +42,7 @@ pnpm test
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/Wellsite-Navigator/version-generator/tags).
+We use our own version generator to version this package. there is no need to set a version string in the package.json file
 
 ## License
 

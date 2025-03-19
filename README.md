@@ -1,6 +1,6 @@
 # Version Generator
 
-A tool that generates version files based on git information, designed to work both as a CLI and a GitHub Action.
+A tool that generates version files based on git information, designed to work as a CLI, a GitHub Action, or as a direct dependency in your code.
 
 ## Installation
 
@@ -19,6 +19,55 @@ generate-version --root-dir <path> [--destination <path>] [--format <string|json
 - `--root-dir, -r`: Root directory of the repository (required)
 - `--destination, -d`: Destination path relative to root directory where the version file should be written (optional)
 - `--format, -f`: Output format - 'string' or 'json' (default: 'string')
+
+
+## NPM SemVer Versions of Packages using this Version Generator
+
+Although we are using a unique version schema, we still effectively have two parts to our version.
+{standard semver component} - {pre-release identifier}
+
+So version restrictions like `^1.0.0@main` will continue to work appropriately.
+
+You can use this repository as an example. Each build of this package is published with a unique version number using this version generator. We also tag each build with a release channel that is equivalent to its branch name. This allows us to get the latest version from the a specific branch.
+`^1.0.0@main` will get the latest version of 1.x.y from the main branch.
+`~1.0.0@main` will get the latest version of 1.0.x from the main branch.
+`1.0.0@main` will get the specific version of 1.0.0 from the main branch.
+
+
+
+## Usage as a Dependency
+
+You can also use the version generator directly in your code:
+
+```bash
+pnpm add @wellsite/version-generator
+```
+
+```javascript
+const { generatePackageVersion, generateAndWriteVersion } = require('@wellsite/version-generator');
+
+// Generate version information without writing to a file
+const versionInfo = await generatePackageVersion('.');
+console.log(versionInfo);
+
+// Or generate and write to a file
+const versionInfo = await generateAndWriteVersion('.', 'version.json');
+console.log(versionInfo);
+```
+
+Or in TypeScript:
+
+```typescript
+import { generatePackageVersion, generateAndWriteVersion } from '@wellsite/version-generator';
+
+// Generate version information without writing to a file
+const versionInfo = await generatePackageVersion('.');
+console.log(versionInfo);
+
+// Or generate and write to a file
+const versionInfo = await generateAndWriteVersion('.', 'version.json');
+console.log(versionInfo);
+```
 
 ## Usage as GitHub Action
 
@@ -54,45 +103,57 @@ jobs:
 ### Outputs
 
 - `version`: The generated version string
-
-## Testing the Action Locally
-
-To test the GitHub Action locally before publishing, you can use the provided local workflow:
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd version-generator
-
-# Install dependencies
-pnpm install
-
-# Build the package
-pnpm build
-
-# Run the local test workflow (if you have act installed)
-act -j test-action -W .github/local-workflows/test-action.yml
-```
-
-Alternatively, you can test the CLI directly:
-
-```bash
-# Build the package
-pnpm build
-
-# Run the CLI
-node dist/cli.js --root-dir . --format json
-```
+- `major`: The major version number
+- `minor`: The minor version number
+- `patch`: The patch version number (commit count since the last tag)
+- `branchName`: The current branch name
+- `commitHash`: The current commit hash
 
 ## How it works
 
-The version generator creates version strings based on git information:
+The version generator creates version strings based on git information.
 
-1. For tagged commits: Uses the tag as the version (e.g., `v1.2.3`)
-2. For commits after a tag: Appends commit count and hash (e.g., `v1.2.3-4-g5678abc`)
-3. For feature branches: Includes branch name (e.g., `v1.2.3-feature-branch.4-g5678abc`)
+The schema is `<major>`.`<minor>`.`<patch>`-`<branch-name>`.`<commit-hash>`
+
+Example: `v1.2-feature-branch.4-g5678abc`
+
+| Component | Description | Source |
+|-----------|-------------|--------|
+| `major` | Major version number | Extracted from the latest git tag (e.g., `v1.2` → `1`) |
+| `minor` | Minor version number | Extracted from the latest git tag (e.g., `v1.2` → `2`) |
+| `patch` | Patch version number | Number of commits since the latest tag |
+| `branch-name` | Current branch name | Git branch name (cleaned of special characters) |
+| `commit-hash` | Short commit hash | Short hash of the current commit |
+
+To update the major or minor version, you need to create a new tag in the format `v<major>.<minor>` (e.g., `v1.2`).
+
+### JSON Output Format
+
+When using the JSON format, the output includes additional metadata:
+
+```json
+{
+  "version": "v1.2.4-g5678abc",
+  "major": "1",
+  "minor": "2",
+  "patch": 4,
+  "branchName": "main",
+  "commitHash": "5678abc"
+}
+```
 
 > **Important**: This tool requires at least one git tag to exist in your repository. If no tags exist, the action will fail with an error message. It is the user's responsibility to ensure that at least one tag exists in the repository before using this action.
+
+### GitHub Action Versioning
+
+This project uses a systematic approach to versioning and tags the major version of each build. This allows github action flows to pin their version of the action to the latest build of a major version.
+
+```yaml
+uses: Wellsite-Navigator/version-generator@v1  # Uses the latest v1.x.x release via the v1 tag
+```
+
+The `@v1` syntax is a shorthand for the latest release of the `v1` major version build
+
 
 ## Troubleshooting
 
@@ -122,8 +183,6 @@ To resolve this issue, you have two options:
        fi
    ```
 
-See the [workflow-with-tag-creation.yml](./examples/workflow-with-tag-creation.yml) example for a complete workflow that includes tag creation.
-
 ### Error: Failed to get commit count from tag
 
 If you encounter an error related to getting the commit count, make sure your repository has at least one tag. The action is configured to work with shallow clones (fetch-depth: 1) by default.
@@ -132,26 +191,6 @@ If you encounter an error related to getting the commit count, make sure your re
 
 For more information on developing and contributing to this project, see [DEVELOPMENT.md](./DEVELOPMENT.md).
 
-## Publishing
-
-For detailed instructions on publishing this package to npm and using it as a GitHub Action, see [PUBLISHING.md](./PUBLISHING.md).
-
-### Versioning
-
-This project uses a combination of tags and branches for versioning:
-
-1. **Specific version tags** (e.g., `v1.0`, `v2.3`): Mark actual releases and are used for calculating the patch number (commits since last tag)
-   > **Important**: The version generator will only consider tags in the exact format `vX.Y` (e.g., `v1.2`) for version calculations. Tags like `v1` (major version only) or `v1.2.3` (with patch version) will be ignored. This allows major version branches (`v1`, `v2`) to coexist with version tags without interfering with version calculations.
-2. **Detailed versions** for npm packages: `v1.2.3-branch-commithash` format, generated automatically from git information
-3. **Major version branches** (e.g., `v1`, `v2`): Always point to the latest release in that major version
-
-This allows users to reference the action with a simple major version reference while still getting detailed version information in the npm package:
-
-```yaml
-uses: Wellsite-Navigator/version-generator@v1  # Uses the latest v1.x.x release via the v1 branch
-```
-
-Using branches for major versions instead of tags ensures that our patch versioning (which counts commits since the last tag) remains accurate, as the specific version tags are only created for actual releases.
 
 ## License
 
