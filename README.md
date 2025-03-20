@@ -24,6 +24,11 @@ generate-version --root-dir <path> [--destination <path>] [--format <string|json
 - `--android-service-account-key`: Service account key for Play Store API (JSON string or base64-encoded JSON)
 - `--android-track`: Track to use for Play Store API (production, beta, alpha) (default: production)
 - `--android-major-increment`: Increment for major version changes (default: 10)
+- `--ios`: Enable iOS build number generation
+- `--ios-bundle-id`: iOS bundle ID for App Store Connect API
+- `--ios-api-key-id`: App Store Connect API Key ID
+- `--ios-api-issuer-id`: App Store Connect API Issuer ID
+- `--ios-api-private-key`: App Store Connect API Private Key (can be base64-encoded)
 
 > **Note**: When running locally, the tool uses local git commands to get version information. The `GITHUB_TOKEN` environment variable is **not required** for local usage.
 >
@@ -77,6 +82,84 @@ This tool can automatically generate Android version codes by querying the Googl
 
 The tool will automatically detect if the service account key is base64-encoded and decode it before use.
 
+## iOS Build Number Generation
+
+This tool can automatically generate iOS build numbers by querying the App Store Connect API to find the highest existing build number for a specific version and incrementing it appropriately.
+
+### Setup
+
+1. **Create an API Key in App Store Connect**:
+   - Log in to [App Store Connect](https://appstoreconnect.apple.com/)
+   - Go to "Users and Access" > "Keys" tab
+   - Click the "+" button to add a new key
+   - Enter a name for the key (e.g., "Version Generator")
+   - Select the "App Manager" role (minimum required for accessing build information)
+   - Click "Generate"
+
+2. **Collect the required credentials**:
+   - **Key ID**: This is displayed on the screen after generating the key (e.g., `ABC1234567`)
+   - **Issuer ID**: This is found at the top of the Keys page (e.g., `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
+   - **Private Key**: Download the `.p8` file when prompted. This file can only be downloaded once!
+   - **Bundle ID**: This is your app's bundle identifier (e.g., `com.example.app`). You can find this in:
+     - Xcode: In your app target's General tab
+     - App Store Connect: Apps > Your App > App Information > Bundle ID
+
+3. **Prepare the private key for use**:
+   - For local use, you can use the file path or the contents of the file
+   - For GitHub Actions, encode the private key as base64:
+     ```bash
+     cat AuthKey_XXXXXXXX.p8 | base64
+     ```
+
+4. **Store securely**:
+   - For GitHub Actions, store the Key ID, Issuer ID, and base64-encoded private key as GitHub secrets
+   - Never commit these values to your repository
+
+### Usage in CLI
+
+```bash
+# Generate version with iOS build number
+npx @wellsite/version-generator \
+  --destination version.json \
+  --ios \
+  --ios-bundle-id com.example.app \
+  --ios-api-key-id XXXXXXXXXX \
+  --ios-api-issuer-id xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
+  --ios-api-private-key-path ./AuthKey_XXXXXXXX.p8
+```
+
+### Usage in GitHub Actions
+
+```yaml
+- name: Generate version
+  uses: wellsite/version-generator@v1
+  with:
+    root-dir: '.'
+    destination: 'version.json'
+    format: 'json'
+    ios: 'true'
+    ios-bundle-id: 'com.example.app'
+    ios-api-key-id: ${{ secrets.APP_STORE_API_KEY_ID }}
+    ios-api-issuer-id: ${{ secrets.APP_STORE_API_ISSUER_ID }}
+    ios-api-private-key: ${{ secrets.APP_STORE_API_PRIVATE_KEY }}
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+The tool will automatically detect if the private key is base64-encoded and decode it before use.
+
+### How iOS Build Number Generation Works
+
+The iOS build number generation follows these steps:
+
+1. The tool authenticates with the App Store Connect API using the provided credentials
+2. It queries the API for all builds with the specified bundle ID and version string (CFBundleShortVersionString)
+3. It finds the highest existing build number (CFBundleVersion) for that version
+4. If builds are found, it increments the highest build number by 1
+5. If no builds are found, it starts with build number 1
+
+This ensures that each new build has a monotonically increasing build number, which is required by the App Store.
+
 ## Usage as a Dependency
 
 You can also use the version generator directly in your code:
@@ -103,6 +186,18 @@ const versionInfoWithAndroid = await generatePackageVersion('.', {
   }
 });
 console.log(versionInfoWithAndroid);
+
+// Generate version information with iOS build number
+const versionInfoWithIos = await generatePackageVersion('.', {
+  ios: {
+    enabled: true,
+    bundleId: 'com.example.app',
+    apiKeyId: 'XXXXXXXXXX',
+    apiIssuerId: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+    apiPrivateKey: '-----BEGIN PRIVATE KEY-----\n...' // Private key content
+  }
+});
+console.log(versionInfoWithIos);
 
 // Or generate and write to a file
 const versionInfo = await generateAndWriteVersion('.', 'version.json');
@@ -155,9 +250,14 @@ jobs:
 | `format` | Output format (string or json) | No | `string` |
 | `android` | Enable Android version code generation | No | `false` |
 | `android-package` | Android package name for Play Store API | No | - |
-| `android-key` | Service account key JSON for Play Store API (as a string) | No | - |
+| `android-service-account-key` | Service account key JSON for Play Store API (as a string) | No | - |
 | `android-track` | Track to use for Play Store API (production, beta, alpha) | No | `production` |
 | `android-major-increment` | Increment for major version changes | No | `10` |
+| `ios` | Enable iOS build number generation | No | `false` |
+| `ios-bundle-id` | iOS bundle ID for App Store Connect API | No | - |
+| `ios-api-key-id` | App Store Connect API Key ID | No | - |
+| `ios-api-issuer-id` | App Store Connect API Issuer ID | No | - |
+| `ios-api-private-key` | App Store Connect API Private Key (can be base64-encoded) | No | - |
 
 ### Outputs
 
@@ -169,6 +269,7 @@ jobs:
 - `commitHash`: The current commit hash
 - `appReleaseVersion`: The app release version (only major.minor.patch) for mobile app versioning
 - `androidVersionCode`: The Android version code (only available when android input is true)
+- `iosBuildNumber`: The iOS build number (only available when ios input is true)
 
 ## How it works
 

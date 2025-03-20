@@ -1,5 +1,6 @@
 import { execSync } from 'child_process';
 import { getAndroidVersionCode, AndroidVersionOptions } from './android-version';
+import { getIosBuildNumber, getIosBuildNumberInfo, IosVersionOptions, IosBuildNumberInfo } from './ios-version';
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import * as https from 'https';
@@ -325,6 +326,8 @@ export interface VersionInfo {
   version: string;
   appReleaseVersion: string; // Contains only major.minor.patch for mobile app versioning
   androidVersionCode?: number; // Optional Android version code
+  iosBuildNumber?: number; // Optional iOS build number (numeric format for backward compatibility)
+  iosBuildNumberString?: string; // Optional iOS build number in string format (e.g., "123.456789")
 }
 
 /**
@@ -343,6 +346,7 @@ export async function generatePackageVersion(
     executor?: Executor; 
     env?: EnvVars;
     android?: AndroidVersionOptions;
+    ios?: IosVersionOptions;
   } = {},
 ): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
@@ -392,6 +396,31 @@ export async function generatePackageVersion(
     }
   }
   
+  // Get iOS build number if iOS options are provided
+  let iosBuildNumber: number | undefined;
+  let iosBuildNumberString: string | undefined;
+  if (options.ios?.enabled) {
+    // Since iOS option is explicitly enabled, we should fail if we can't generate the build number
+    const buildNumberInfo = await getIosBuildNumberInfo({
+      ...options.ios,
+      appReleaseVersion,
+      commitHash
+    });
+    
+    // Store both the numeric and string representations
+    iosBuildNumberString = buildNumberInfo.buildVersion;
+    
+    // Convert to number for backward compatibility
+    const buildNumber = parseInt(buildNumberInfo.buildVersion.replace('.', ''));
+    
+    // Only set iosBuildNumber if a valid build number was returned
+    if (buildNumber > 0) {
+      iosBuildNumber = buildNumber;
+    } else {
+      throw new Error('iOS build number generation failed: returned invalid build number');
+    }
+  }
+  
   // Return the complete version info object
   return {
     major,
@@ -401,7 +430,9 @@ export async function generatePackageVersion(
     commitHash,
     version,
     appReleaseVersion,
-    androidVersionCode
+    androidVersionCode,
+    iosBuildNumber,
+    iosBuildNumberString
   };
 }
 
@@ -443,7 +474,7 @@ export function writeVersionToFile(
 export async function generateAndWriteVersion(
   rootDir: string,
   destination?: string,
-  options: { executor?: Executor; env?: EnvVars; android?: AndroidVersionOptions } = {},
+  options: { executor?: Executor; env?: EnvVars; android?: AndroidVersionOptions; ios?: IosVersionOptions } = {},
 ): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
   const env = options.env || (process.env as EnvVars);
@@ -452,6 +483,7 @@ export async function generateAndWriteVersion(
     executor,
     env,
     android: options.android,
+    ios: options.ios,
   });
 
   // If a destination is provided, write the version to that location as a JSON object

@@ -34,6 +34,22 @@ inputs:
     description: 'Increment to add to version code on major version change (default: 10)'
     required: false
     default: '10'
+  ios:
+    description: 'Enable iOS build number generation'
+    required: false
+    default: 'false'
+  ios-bundle-id:
+    description: 'iOS bundle ID'
+    required: false
+  ios-api-key-id:
+    description: 'App Store Connect API Key ID'
+    required: false
+  ios-api-issuer-id:
+    description: 'App Store Connect API Issuer ID'
+    required: false
+  ios-api-private-key:
+    description: 'App Store Connect API Private Key (can be base64-encoded)'
+    required: false
 
 
 outputs:
@@ -61,6 +77,9 @@ outputs:
   androidVersionCode:
     description: 'The Android version code (if Android version code generation is enabled)'
     value: ${{ steps.generate-version.outputs.androidVersionCode }}
+  iosBuildNumber:
+    description: 'The iOS build number (if iOS build number generation is enabled)'
+    value: ${{ steps.generate-version.outputs.iosBuildNumber }}
 
 runs:
   using: 'composite'
@@ -110,8 +129,30 @@ runs:
           fi
         fi
         
+        # Prepare iOS options if enabled
+        IOS_OPTIONS=""
+        if [ "${{ inputs.ios }}" = "true" ]; then
+          IOS_OPTIONS="--ios"
+          
+          if [ ! -z "${{ inputs.ios-bundle-id }}" ]; then
+            IOS_OPTIONS="$IOS_OPTIONS --ios-bundle-id \"${{ inputs.ios-bundle-id }}\""
+          fi
+          
+          if [ ! -z "${{ inputs.ios-api-key-id }}" ]; then
+            IOS_OPTIONS="$IOS_OPTIONS --ios-api-key-id \"${{ inputs.ios-api-key-id }}\""
+          fi
+          
+          if [ ! -z "${{ inputs.ios-api-issuer-id }}" ]; then
+            IOS_OPTIONS="$IOS_OPTIONS --ios-api-issuer-id \"${{ inputs.ios-api-issuer-id }}\""
+          fi
+          
+          if [ ! -z "${{ inputs.ios-api-private-key }}" ]; then
+            IOS_OPTIONS="$IOS_OPTIONS --ios-api-private-key \"${{ inputs.ios-api-private-key }}\""
+          fi
+        fi
+        
         # Always generate JSON format for parsing components
-        VERSION_JSON=$(generate-version --root-dir "${{ inputs.root-dir }}" --format json $ANDROID_OPTIONS)
+        VERSION_JSON=$(generate-version --root-dir "${{ inputs.root-dir }}" --format json $ANDROID_OPTIONS $IOS_OPTIONS)
 
         # If destination is specified, write the output in the desired format
         if [ ! -z "${{ inputs.destination }}" ]; then
@@ -152,6 +193,12 @@ runs:
         ANDROID_VERSION_CODE=$(echo "$VERSION_JSON" | jq -r '.androidVersionCode // ""')
         if [ ! -z "$ANDROID_VERSION_CODE" ]; then
           echo "androidVersionCode=${ANDROID_VERSION_CODE}" >> $GITHUB_OUTPUT
+        fi
+        
+        # Extract and set iOS build number if available
+        IOS_BUILD_NUMBER=$(echo "$VERSION_JSON" | jq -r '.iosBuildNumber // ""')
+        if [ ! -z "$IOS_BUILD_NUMBER" ]; then
+          echo "iosBuildNumber=${IOS_BUILD_NUMBER}" >> $GITHUB_OUTPUT
         fi
 
         # Display output

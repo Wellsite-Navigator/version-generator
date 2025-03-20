@@ -25,6 +25,13 @@ export async function runVersionGenerator(
     majorVersionIncrement?: number;
     currentMajorVersion?: number;
   },
+  iosOptions?: {
+    enabled?: boolean;
+    bundleId?: string;
+    apiKeyId?: string;
+    apiIssuerId?: string;
+    apiPrivateKey?: string;
+  },
 ): Promise<VersionInfo> {
   // Resolve the root directory to an absolute path
   const resolvedRootDir = resolve(rootDir);
@@ -44,6 +51,14 @@ export async function runVersionGenerator(
       track: androidOptions.track,
       majorVersionIncrement: androidOptions.majorVersionIncrement,
       currentMajorVersion: androidOptions.currentMajorVersion || 0, // Default to 0 if not provided
+    } : undefined,
+    ios: iosOptions ? {
+      enabled: iosOptions.enabled,
+      bundleId: iosOptions.bundleId,
+      apiKeyId: iosOptions.apiKeyId,
+      apiIssuerId: iosOptions.apiIssuerId,
+      apiPrivateKey: iosOptions.apiPrivateKey,
+      appReleaseVersion: '', // This will be set in generatePackageVersion
     } : undefined
   });
 
@@ -81,6 +96,11 @@ if (require.main === module) {
     .option('--android-service-account-key <key>', 'Service account key JSON for Google Play API authentication')
     .option('--android-track <track>', 'Track to check for version codes')
     .option('--android-major-increment <increment>', `Increment to add to version code on major version change (default: ${DEFAULT_MAJOR_VERSION_INCREMENT})`, String(DEFAULT_MAJOR_VERSION_INCREMENT))
+    .option('--ios', 'Enable iOS build number generation')
+    .option('--ios-bundle-id <bundleId>', 'iOS bundle ID')
+    .option('--ios-api-key-id <keyId>', 'App Store Connect API Key ID')
+    .option('--ios-api-issuer-id <issuerId>', 'App Store Connect API Issuer ID')
+    .option('--ios-api-private-key <key>', 'App Store Connect API Private Key')
     .action(async (options) => {
       try {
         // Prepare Android options if --android flag is set
@@ -93,7 +113,16 @@ if (require.main === module) {
           // We don't set currentMajorVersion here as it will be determined from the git tag in generatePackageVersion
         } : undefined;
         
-        await runVersionGenerator(options.rootDir, options.destination, options.format, androidOptions);
+        // Prepare iOS options if --ios flag is set
+        const iosOptions = options.ios ? {
+          enabled: true,
+          bundleId: options.iosBundleId,
+          apiKeyId: options.iosApiKeyId,
+          apiIssuerId: options.iosApiIssuerId,
+          apiPrivateKey: options.iosApiPrivateKey,
+        } : undefined;
+        
+        await runVersionGenerator(options.rootDir, options.destination, options.format, androidOptions, iosOptions);
       } catch (error: Error | unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error(`Error: ${errorMessage}`);
