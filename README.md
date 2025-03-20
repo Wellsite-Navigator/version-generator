@@ -108,6 +108,7 @@ jobs:
 - `patch`: The patch version number (commit count since the last tag)
 - `branchName`: The current branch name
 - `commitHash`: The current commit hash
+- `appReleaseVersion`: The app release version (only major.minor.patch) for mobile app versioning
 
 ## How it works
 

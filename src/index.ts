@@ -312,6 +312,7 @@ export interface VersionInfo {
   branchName: string;
   commitHash: string;
   version: string;
+  appReleaseVersion: string; // Contains only major.minor.patch for mobile app versioning
 }
 
 /**
@@ -353,6 +354,9 @@ export async function generatePackageVersion(
   // Generate version string in npm semver compatible format
   const version = `${major}.${minor}.${patch}-${branchName}.${commitHash}`;
   
+  // Generate app release version (only major.minor.patch)
+  const appReleaseVersion = `${major}.${minor}.${patch}`;
+  
   // Return the complete version info object
   return {
     major,
@@ -360,7 +364,8 @@ export async function generatePackageVersion(
     patch,
     branchName,
     commitHash,
-    version
+    version,
+    appReleaseVersion
   };
 }
 

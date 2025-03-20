@@ -38,6 +38,9 @@ outputs:
   commitHash:
     description: 'The current commit hash'
     value: ${{ steps.generate-version.outputs.commitHash }}
+  appReleaseVersion:
+    description: 'The app release version (only major.minor.patch) for mobile app versioning'
+    value: ${{ steps.generate-version.outputs.appReleaseVersion }}
 
 runs:
   using: 'composite'
@@ -92,6 +95,7 @@ runs:
         PATCH=$(echo "$VERSION_JSON" | jq -r '.patch')
         BRANCH_NAME=$(echo "$VERSION_JSON" | jq -r '.branchName')
         COMMIT_HASH=$(echo "$VERSION_JSON" | jq -r '.commitHash')
+        APP_RELEASE_VERSION=$(echo "$VERSION_JSON" | jq -r '.appReleaseVersion')
 
         # Set outputs
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
@@ -100,6 +104,7 @@ runs:
         echo "patch=${PATCH}" >> $GITHUB_OUTPUT
         echo "branchName=${BRANCH_NAME}" >> $GITHUB_OUTPUT
         echo "commitHash=${COMMIT_HASH}" >> $GITHUB_OUTPUT
+        echo "appReleaseVersion=${APP_RELEASE_VERSION}" >> $GITHUB_OUTPUT
 
         # Display output
         echo "Generated version: ${VERSION}"
@@ -108,3 +113,4 @@ runs:
         echo "Patch: ${PATCH}"
         echo "Branch: ${BRANCH_NAME}"
         echo "Commit: ${COMMIT_HASH}"
+        echo "App Release Version: ${APP_RELEASE_VERSION}"
