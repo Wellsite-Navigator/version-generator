@@ -17,6 +17,23 @@ inputs:
     description: 'Output format (string or json)'
     required: false
     default: 'string'
+  android:
+    description: 'Enable Android version code generation'
+    required: false
+    default: 'false'
+  android-package:
+    description: 'Android package name'
+    required: false
+  android-service-account-key:
+    description: 'Service account key JSON for Google Play API authentication'
+    required: false
+  android-track:
+    description: 'Track to check for version codes'
+    required: false
+  android-major-increment:
+    description: 'Increment to add to version code on major version change (default: 10)'
+    required: false
+    default: '10'
 
 
 outputs:
@@ -41,6 +58,9 @@ outputs:
   appReleaseVersion:
     description: 'The app release version (only major.minor.patch) for mobile app versioning'
     value: ${{ steps.generate-version.outputs.appReleaseVersion }}
+  androidVersionCode:
+    description: 'The Android version code (if Android version code generation is enabled)'
+    value: ${{ steps.generate-version.outputs.androidVersionCode }}
 
 runs:
   using: 'composite'
@@ -68,8 +88,30 @@ runs:
       id: generate-version
       shell: bash
       run: |
+        # Prepare Android options if enabled
+        ANDROID_OPTIONS=""
+        if [ "${{ inputs.android }}" = "true" ]; then
+          ANDROID_OPTIONS="--android"
+          
+          if [ ! -z "${{ inputs.android-package }}" ]; then
+            ANDROID_OPTIONS="$ANDROID_OPTIONS --android-package \"${{ inputs.android-package }}\""
+          fi
+          
+          if [ ! -z "${{ inputs.android-service-account-key }}" ]; then
+            ANDROID_OPTIONS="$ANDROID_OPTIONS --android-service-account-key \"${{ inputs.android-service-account-key }}\""
+          fi
+          
+          if [ ! -z "${{ inputs.android-track }}" ]; then
+            ANDROID_OPTIONS="$ANDROID_OPTIONS --android-track \"${{ inputs.android-track }}\""
+          fi
+          
+          if [ ! -z "${{ inputs.android-major-increment }}" ]; then
+            ANDROID_OPTIONS="$ANDROID_OPTIONS --android-major-increment \"${{ inputs.android-major-increment }}\""
+          fi
+        fi
+        
         # Always generate JSON format for parsing components
-        VERSION_JSON=$(generate-version --root-dir "${{ inputs.root-dir }}" --format json)
+        VERSION_JSON=$(generate-version --root-dir "${{ inputs.root-dir }}" --format json $ANDROID_OPTIONS)
 
         # If destination is specified, write the output in the desired format
         if [ ! -z "${{ inputs.destination }}" ]; then
@@ -105,6 +147,12 @@ runs:
         echo "branchName=${BRANCH_NAME}" >> $GITHUB_OUTPUT
         echo "commitHash=${COMMIT_HASH}" >> $GITHUB_OUTPUT
         echo "appReleaseVersion=${APP_RELEASE_VERSION}" >> $GITHUB_OUTPUT
+        
+        # Extract and set Android version code if available
+        ANDROID_VERSION_CODE=$(echo "$VERSION_JSON" | jq -r '.androidVersionCode // ""')
+        if [ ! -z "$ANDROID_VERSION_CODE" ]; then
+          echo "androidVersionCode=${ANDROID_VERSION_CODE}" >> $GITHUB_OUTPUT
+        fi
 
         # Display output
         echo "Generated version: ${VERSION}"
@@ -114,3 +162,7 @@ runs:
         echo "Branch: ${BRANCH_NAME}"
         echo "Commit: ${COMMIT_HASH}"
         echo "App Release Version: ${APP_RELEASE_VERSION}"
+        
+        if [ ! -z "$ANDROID_VERSION_CODE" ]; then
+          echo "Android Version Code: ${ANDROID_VERSION_CODE}"
+        fi

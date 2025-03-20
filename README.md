@@ -19,6 +19,15 @@ generate-version --root-dir <path> [--destination <path>] [--format <string|json
 - `--root-dir, -r`: Root directory of the repository (required)
 - `--destination, -d`: Destination path relative to root directory where the version file should be written (optional)
 - `--format, -f`: Output format - 'string' or 'json' (default: 'string')
+- `--android`: Enable Android version code generation
+- `--android-package`: Android package name for Play Store API
+- `--android-service-account-key`: Service account key for Play Store API (JSON string or base64-encoded JSON)
+- `--android-track`: Track to use for Play Store API (production, beta, alpha) (default: production)
+- `--android-major-increment`: Increment for major version changes (default: 10)
+
+> **Note**: When running locally, the tool uses local git commands to get version information. The `GITHUB_TOKEN` environment variable is **not required** for local usage.
+>
+> However, if the tool detects it's running in a GitHub Actions environment (when `GITHUB_ACTIONS=true`), it will use the GitHub API instead of local git commands, and in this case, the `GITHUB_TOKEN` is required.
 
 
 ## NPM SemVer Versions of Packages using this Version Generator
@@ -33,7 +42,40 @@ You can use this repository as an example. Each build of this package is publish
 `~1.0.0@main` will get the latest version of 1.0.x from the main branch.
 `1.0.0@main` will get the specific version of 1.0.0 from the main branch.
 
+## Android Version Code Generation
 
+This tool can automatically generate Android version codes by querying the Google Play Developer API to find the highest existing version code and incrementing it appropriately.
+
+### Setup
+
+1. Create a service account in the Google Cloud Console with access to the Google Play Android Developer API
+2. Download the service account key JSON file
+3. When using in GitHub Actions, encode the JSON as base64:
+   ```bash
+   cat service-account-key.json | base64
+   ```
+4. Store the base64-encoded string as a GitHub secret
+
+### Usage in GitHub Actions
+
+```yaml
+- name: Generate version
+  uses: wellsite/version-generator@v1
+  with:
+    root-dir: '.'
+    destination: 'version.json'
+    format: 'json'
+    android: 'true'
+    android-package: 'com.example.app'
+    android-service-account-key: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_KEY }}
+    android-track: 'production'
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+> **Important**: The `GITHUB_TOKEN` environment variable is **required** when running in GitHub Actions. The tool detects the GitHub Actions environment and uses the GitHub API instead of local git commands. GitHub Actions automatically provides this token, but you need to explicitly pass it to the action's environment as shown above. Without it, the version generation will fail with an error.
+
+The tool will automatically detect if the service account key is base64-encoded and decode it before use.
 
 ## Usage as a Dependency
 
@@ -49,6 +91,18 @@ const { generatePackageVersion, generateAndWriteVersion } = require('@wellsite/v
 // Generate version information without writing to a file
 const versionInfo = await generatePackageVersion('.');
 console.log(versionInfo);
+
+// Generate version information with Android version code
+const versionInfoWithAndroid = await generatePackageVersion('.', {
+  android: {
+    enabled: true,
+    packageName: 'com.example.app',
+    serviceAccountKey: '{ ... }', // Service account key JSON
+    track: 'production',
+    majorVersionIncrement: 10
+  }
+});
+console.log(versionInfoWithAndroid);
 
 // Or generate and write to a file
 const versionInfo = await generateAndWriteVersion('.', 'version.json');
@@ -99,6 +153,11 @@ jobs:
 | `root-dir` | Root directory of the repository | Yes | `.` |
 | `destination` | Destination path relative to root directory where the version file should be written | No | - |
 | `format` | Output format (string or json) | No | `string` |
+| `android` | Enable Android version code generation | No | `false` |
+| `android-package` | Android package name for Play Store API | No | - |
+| `android-key` | Service account key JSON for Play Store API (as a string) | No | - |
+| `android-track` | Track to use for Play Store API (production, beta, alpha) | No | `production` |
+| `android-major-increment` | Increment for major version changes | No | `10` |
 
 ### Outputs
 
@@ -109,6 +168,7 @@ jobs:
 - `branchName`: The current branch name
 - `commitHash`: The current commit hash
 - `appReleaseVersion`: The app release version (only major.minor.patch) for mobile app versioning
+- `androidVersionCode`: The Android version code (only available when android input is true)
 
 ## How it works
 
@@ -139,11 +199,41 @@ When using the JSON format, the output includes additional metadata:
   "minor": "2",
   "patch": 4,
   "branchName": "main",
-  "commitHash": "5678abc"
+  "commitHash": "5678abc",
+  "appReleaseVersion": "1.2.4",
+  "androidVersionCode": 15
 }
 ```
 
 > **Important**: This tool requires at least one git tag to exist in your repository. If no tags exist, the action will fail with an error message. It is the user's responsibility to ensure that at least one tag exists in the repository before using this action.
+
+### Android Version Code Generation
+
+The tool can generate Android version codes by querying the Google Play Developer API to find the highest existing version code and incrementing it appropriately. This ensures that your version codes are always higher than what's currently published, which is a requirement for Android app updates.
+
+#### How It Works
+
+1. When the `--android` flag is provided, the tool will query the Google Play Developer API to find the highest version code across all tracks (or a specific track if specified).
+2. If no existing version code is found (first-time publishing), it will start with version code 1.
+3. If an existing version code is found, it will:
+   - Increment by `majorVersionIncrement` (default: 10) if the major version has increased
+   - Increment by 1 if the major version is the same
+
+This approach ensures that:
+- Version codes are always increasing
+- There's room for patching older versions
+- The tool works even for new apps with no published versions
+
+#### Requirements
+
+To use this feature, you need:
+1. A Google Play Developer account
+2. A service account with appropriate permissions
+3. The package name of your Android app
+
+#### Authentication
+
+Create a service account in the Google Cloud Console and grant it access to your Google Play Developer account. Download the JSON key file and provide it to the tool using the `--android-key` option.
 
 ### GitHub Action Versioning
 

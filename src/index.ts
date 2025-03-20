@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { getAndroidVersionCode, AndroidVersionOptions } from './android-version';
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import * as https from 'https';
@@ -43,6 +44,16 @@ export const defaultExecutor: Executor = {
   writeFile: (filePath: string, content: string) => writeFileSync(filePath, content),
   mkdirSync: (dirPath: string, options?: { recursive: boolean }) => mkdirSync(dirPath, options),
   getGitHubData: async (url: string, env: EnvVars = process.env as EnvVars) => {
+    // Fail if GITHUB_TOKEN is missing when running in GitHub Actions
+    if (!env.GITHUB_TOKEN && env.GITHUB_ACTIONS === 'true') {
+      throw new Error('GITHUB_TOKEN environment variable is not set. This is required for GitHub API access when running in GitHub Actions.');
+    }
+
+    // Warn if GITHUB_TOKEN is missing but not in GitHub Actions
+    if (!env.GITHUB_TOKEN && env.GITHUB_ACTIONS !== 'true') {
+      console.warn('Warning: GITHUB_TOKEN environment variable is not set. GitHub API requests may be rate-limited.');
+    }
+
     return new Promise((resolve, reject) => {
       const req = https.get(
         url,
@@ -313,6 +324,7 @@ export interface VersionInfo {
   commitHash: string;
   version: string;
   appReleaseVersion: string; // Contains only major.minor.patch for mobile app versioning
+  androidVersionCode?: number; // Optional Android version code
 }
 
 /**
@@ -321,11 +333,17 @@ export interface VersionInfo {
  * @param rootDir - Optional root directory
  * @param options - Options for version generation
  * @param options.executor - Custom executor for dependency injection
+ * @param options.env - Environment variables for dependency injection
+ * @param options.android - Android version options
  * @returns Promise resolving to the version information object
  */
 export async function generatePackageVersion(
   rootDir?: string,
-  options: { executor?: Executor; env?: EnvVars } = {},
+  options: { 
+    executor?: Executor; 
+    env?: EnvVars;
+    android?: AndroidVersionOptions;
+  } = {},
 ): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
   const env = options.env || (process.env as EnvVars);
@@ -357,6 +375,23 @@ export async function generatePackageVersion(
   // Generate app release version (only major.minor.patch)
   const appReleaseVersion = `${major}.${minor}.${patch}`;
   
+  // Get Android version code if Android options are provided
+  let androidVersionCode: number | undefined;
+  if (options.android?.enabled) {
+    // Since Android option is explicitly enabled, we should fail if we can't generate the version code
+    const versionCode = await getAndroidVersionCode({
+      ...options.android,
+      currentMajorVersion: parseInt(major, 10)
+    });
+    
+    // Only set androidVersionCode if a valid version code was returned
+    if (versionCode > 0) {
+      androidVersionCode = versionCode;
+    } else {
+      throw new Error('Android version code generation failed: returned invalid version code');
+    }
+  }
+  
   // Return the complete version info object
   return {
     major,
@@ -365,7 +400,8 @@ export async function generatePackageVersion(
     branchName,
     commitHash,
     version,
-    appReleaseVersion
+    appReleaseVersion,
+    androidVersionCode
   };
 }
 
@@ -401,12 +437,13 @@ export function writeVersionToFile(
  * @param options - Options for generating and writing the version
  * @param options.executor - Custom executor for dependency injection
  * @param options.env - Environment variables for dependency injection
+ * @param options.android - Android version options
  * @returns Promise resolving to the version information object
  */
 export async function generateAndWriteVersion(
   rootDir: string,
   destination?: string,
-  options: { executor?: Executor; env?: EnvVars } = {},
+  options: { executor?: Executor; env?: EnvVars; android?: AndroidVersionOptions } = {},
 ): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
   const env = options.env || (process.env as EnvVars);
@@ -414,6 +451,7 @@ export async function generateAndWriteVersion(
   const versionInfo = await generatePackageVersion(rootDir, {
     executor,
     env,
+    android: options.android,
   });
 
   // If a destination is provided, write the version to that location as a JSON object

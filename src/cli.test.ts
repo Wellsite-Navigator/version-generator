@@ -32,7 +32,7 @@ describe('CLI', () => {
     const result = await runVersionGenerator('/test/root');
 
     // Verify
-    expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', undefined);
+    expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', undefined, { android: undefined });
     expect(result).toEqual({
       major: '1',
       minor: '2',
@@ -49,7 +49,7 @@ describe('CLI', () => {
     const result = await runVersionGenerator('/test/root', undefined, 'json');
 
     // Verify
-    expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', undefined);
+    expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', undefined, { android: undefined });
     const expectedVersionInfo = {
       major: '1',
       minor: '2',
@@ -67,7 +67,7 @@ describe('CLI', () => {
     const result = await runVersionGenerator('/test/root', 'path/to/version.json');
 
     // Verify
-    expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', 'path/to/version.json');
+    expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', 'path/to/version.json', { android: undefined });
     expect(result).toEqual({
       major: '1',
       minor: '2',
@@ -84,5 +84,38 @@ describe('CLI', () => {
     await expect(runVersionGenerator('/test/root', undefined, 'invalid')).rejects.toThrow(
       'Format must be either "string" or "json"',
     );
+  });
+
+  it('should pass Android options when provided', async () => {
+    // Execute
+    const androidOptions = {
+      enabled: true,
+      packageName: 'com.example.app',
+      serviceAccountKey: '{}',
+      track: 'production',
+      majorVersionIncrement: 20
+    };
+    const result = await runVersionGenerator('/test/root', undefined, 'string', androidOptions);
+
+    // Verify
+    expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', undefined, {
+      android: {
+        enabled: true,
+        packageName: 'com.example.app',
+        serviceAccountKey: '{}',
+        track: 'production',
+        majorVersionIncrement: 20,
+        currentMajorVersion: 0
+      }
+    });
+    expect(result).toEqual({
+      major: '1',
+      minor: '2',
+      patch: 3,
+      branchName: 'test',
+      commitHash: 'abc123',
+      version: '1.2.3-test-abc123'
+    });
+    expect(mockConsoleLog).toHaveBeenCalledWith('1.2.3-test-abc123');
   });
 });

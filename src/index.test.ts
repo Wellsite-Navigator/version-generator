@@ -110,7 +110,8 @@ describe('Version Generator', () => {
         patch: 0,
         branchName: 'main',
         commitHash: 'abc123',
-        version: version
+        version: version,
+        appReleaseVersion: '1.0.0'
       };
 
       // Execute
@@ -168,7 +169,7 @@ describe('Version Generator', () => {
       };
 
       // Execute
-      const result = await index.getLatestTag({ executor: mockExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' }});
+      const result = await index.getLatestTag({ executor: mockExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false', GITHUB_TOKEN: 'mock-token' }});
 
       // Verify
       expect(result).toBe('v0.0');
@@ -233,7 +234,7 @@ describe('Version Generator', () => {
       };
 
       // Execute & Verify
-      await expect(index.getLatestTag({ executor: mockExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' }})).rejects.toThrow('No git tags found');
+      await expect(index.getLatestTag({ executor: mockExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false', GITHUB_TOKEN: 'mock-token' }})).rejects.toThrow('No git tags found');
     });
   });
 
@@ -297,6 +298,7 @@ describe('Version Generator', () => {
           GITHUB_REPOSITORY_OWNER: 'testowner',
           GITHUB_REPOSITORY: 'testowner/testrepo',
           GITHUB_SHA: 'abcdef1234567890',
+          GITHUB_TOKEN: 'mock-token',
         },
       });
 
@@ -327,6 +329,7 @@ describe('Version Generator', () => {
             GITHUB_REPOSITORY_OWNER: 'testowner',
             GITHUB_REPOSITORY: 'testowner/testrepo',
             GITHUB_SHA: 'abcdef1234567890',
+            GITHUB_TOKEN: 'mock-token',
           },
         }),
       ).rejects.toThrow(
@@ -408,6 +411,7 @@ describe('getLatestTag with GitHub API', () => {
         GITHUB_ACTIONS: 'true',
         GITHUB_REPOSITORY_OWNER: 'Wellsite-Navigator',
         GITHUB_REPOSITORY: 'Wellsite-Navigator/wellsite-portal',
+        GITHUB_TOKEN: 'mock-token',
       },
     });
 
@@ -437,6 +441,7 @@ describe('getLatestTag with GitHub API', () => {
           GITHUB_ACTIONS: 'true',
           GITHUB_REPOSITORY_OWNER: 'Wellsite-Navigator',
           GITHUB_REPOSITORY: 'Wellsite-Navigator/wellsite-portal',
+          GITHUB_TOKEN: 'mock-token',
         },
       }),
     ).rejects.toThrow('Failed to get tag from GitHub API');
@@ -464,6 +469,7 @@ describe('getLatestTag with GitHub API', () => {
           GITHUB_ACTIONS: 'true',
           GITHUB_REPOSITORY_OWNER: 'Wellsite-Navigator',
           GITHUB_REPOSITORY: 'Wellsite-Navigator/wellsite-portal',
+          GITHUB_TOKEN: 'mock-token',
         },
       }),
     ).rejects.toThrow('No tags found in repository');
@@ -488,6 +494,7 @@ describe('getLatestTag with GitHub API', () => {
           GITHUB_ACTIONS: 'true',
           GITHUB_REPOSITORY_OWNER: 'Wellsite-Navigator',
           GITHUB_REPOSITORY: 'Wellsite-Navigator/wellsite-portal',
+          GITHUB_TOKEN: 'mock-token',
         },
       }),
     ).rejects.toThrow('No tags matching the required format vX.Y found in repository');
