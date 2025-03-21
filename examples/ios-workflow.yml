@@ -47,5 +47,5 @@ jobs:
           echo ""
           echo "✅ Version Generated: ${{ steps.ios-version.outputs.version }}"
           echo "✅ Release Version Generated: ${{ steps.ios-version.outputs.appReleaseVersion }}"
-          echo "✅ versionCode Generated: ${{ steps.android-ios.outputs.iosBuildNumberString }}"
+          echo "✅ iOS bundle version: ${{ steps.ios-version.outputs.iosBuildNumberString }}"
           echo ""
