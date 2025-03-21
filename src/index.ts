@@ -12,6 +12,7 @@ import * as https from 'https';
  */
 export type EnvVars = {
   GITHUB_REF_NAME?: string;
+  GITHUB_HEAD_REF?: string;
   GITHUB_SHA?: string;
   NODE_ENV?: string;
   [key: string]: string | undefined;
@@ -266,6 +267,12 @@ export function getCurrentBranch(
   const executor = options.executor || defaultExecutor;
   const env = options.env || (process.env as EnvVars);
 
+  // GITHUB_HEAD_REF is set when the workflow is triggered by a pull request
+  // In this case, GITHUB_REF_NAME is incorrect (eg: refs/pull/42/merge)
+  if (env.GITHUB_HEAD_REF) {
+    return env.GITHUB_HEAD_REF;
+  }
+
   if (env.GITHUB_REF_NAME) {
     return env.GITHUB_REF_NAME;
   }
@@ -306,11 +313,16 @@ export function getShortCommitHash(
 
 /**
  * Cleans a branch name for use in a version string
- *
+ * Removes refs/heads/ or refs/pull/ prefixes if present
+ * 
  * @param branchName - The branch name to clean
  * @returns The cleaned branch name
  */
 export function cleanBranchName(branchName: string): string {
+  // Remove refs/heads/ or refs/pull/ prefixes if present
+  branchName = branchName.replace(/^refs\/(heads|pull)\//, '');
+  
+  // Replace non-alphanumeric characters with hyphens
   return branchName.replace(/[^a-zA-Z0-9]/g, '-');
 }
 
