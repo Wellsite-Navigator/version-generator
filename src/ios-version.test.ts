@@ -1,5 +1,4 @@
 import {
-  getIosBuildNumber,
   getIosBuildNumberInfo,
   encodeCommitHash,
   IosVersionOptions,
@@ -9,6 +8,7 @@ import {
   getAppStoreVersionInfo,
   DefaultIosExecutor,
   processBuilds,
+  IosBuildNumberInfo,
 } from './ios-version';
 import { IncomingMessage } from 'http';
 
@@ -136,30 +136,36 @@ describe('iOS Version', () => {
     });
   });
 
-  describe('getIosBuildNumber', () => {
+  describe('getIosBuildNumberInfo for build number tests', () => {
+    // Mock the executor for getIosBuildNumberInfo
+    let mockExecutor: IosExecutor;
+
     beforeEach(() => {
-      // Mock getIosBuildNumber directly to avoid JWT errors
-      jest.spyOn(require('./ios-version'), 'getIosBuildNumber').mockImplementation(async (...args: unknown[]) => {
-        const options = args[0] as IosVersionOptions;
-        if (!options.enabled) {
-          return 0;
-        }
+      mockExecutor = {
+        generateToken: jest.fn().mockReturnValue('mock-token'),
+        queryApi: jest.fn().mockImplementation(async (bundleId: string, appReleaseVersion: string) => {
+          if (!bundleId || !appReleaseVersion) {
+            throw new Error('Bundle ID and app release version are required');
+          }
 
-        if (!options.apiKeyId || !options.apiIssuerId || !options.apiPrivateKey || !options.bundleId) {
-          throw new Error('iOS build number generation requires apiKeyId, apiIssuerId, apiPrivateKey, and bundleId');
-        }
+          // Return different values based on the test case
+          if (bundleId === 'com.example.app' && appReleaseVersion === '1.0.0') {
+            // This is for the "highest build number" test
+            return {
+              data: [
+                { attributes: { version: '1.0.0', buildNumber: '5' } },
+                { attributes: { version: '1.0.0', buildNumber: '6' } },
+                { attributes: { version: '1.0.0', buildNumber: '4' } },
+              ],
+            };
+          } else if (bundleId === 'com.example.error') {
+            throw new Error('API request failed');
+          }
 
-        // Return different values based on the test case
-        if (options.bundleId === 'com.example.app' && options.appReleaseVersion === '1.0.0') {
-          // This is for the "highest build number" test
-          return 6;
-        } else if (options.bundleId === 'com.example.error') {
-          throw new Error('Failed to get iOS build number: API request failed');
-        }
-
-        // Default for "no builds found" test
-        return 1;
-      });
+          // Default for "no builds found" test
+          return { data: [] };
+        }),
+      };
     });
 
     afterEach(() => {
@@ -167,14 +173,15 @@ describe('iOS Version', () => {
       jest.clearAllMocks();
     });
 
-    it('should return 0 when iOS build number generation is not enabled', async () => {
+    it('should return build number 0 when iOS build number generation is not enabled', async () => {
       const testOptions: IosVersionOptions = {
         enabled: false,
         appReleaseVersion: '1.0.0',
       };
 
-      const result = await getIosBuildNumber(testOptions);
-      expect(result).toBe(0);
+      const result = await getIosBuildNumberInfo(testOptions, mockExecutor);
+      expect(result.buildNumber).toBe(0);
+      expect(result.buildVersion).toBe('0');
     });
 
     it('should throw an error when required options are missing', async () => {
@@ -183,12 +190,12 @@ describe('iOS Version', () => {
         appReleaseVersion: '1.0.0',
       };
 
-      await expect(getIosBuildNumber(testOptions)).rejects.toThrow(
-        'iOS build number generation requires apiKeyId, apiIssuerId, apiPrivateKey, and bundleId',
+      await expect(getIosBuildNumberInfo(testOptions, mockExecutor)).rejects.toThrow(
+        'iOS build number generation requires apiKeyId, apiIssuerId, apiPrivateKey, bundleId, and appReleaseVersion',
       );
     });
 
-    it('should return 1 when no builds are found for the version', async () => {
+    it('should return build number 1 when no builds are found for the version', async () => {
       const testOptions: IosVersionOptions = {
         enabled: true,
         bundleId: 'com.example.new',
@@ -198,8 +205,8 @@ describe('iOS Version', () => {
         appReleaseVersion: '1.0.0',
       };
 
-      const result = await getIosBuildNumber(testOptions);
-      expect(result).toBe(1);
+      const result = await getIosBuildNumberInfo(testOptions, mockExecutor);
+      expect(result.buildNumber).toBe(1);
     });
 
     it('should return highest build number + 1 when builds are found', async () => {
@@ -212,8 +219,8 @@ describe('iOS Version', () => {
         appReleaseVersion: '1.0.0',
       };
 
-      const result = await getIosBuildNumber(testOptions);
-      expect(result).toBe(6);
+      const result = await getIosBuildNumberInfo(testOptions, mockExecutor);
+      expect(result.buildNumber).toBe(7); // 6 + 1
     });
 
     it('should handle API errors gracefully', async () => {
@@ -226,7 +233,7 @@ describe('iOS Version', () => {
         appReleaseVersion: '1.0.0',
       };
 
-      await expect(getIosBuildNumber(testOptions)).rejects.toThrow('Failed to get iOS build number');
+      await expect(getIosBuildNumberInfo(testOptions, mockExecutor)).rejects.toThrow('Failed to get iOS build number');
     });
   });
 

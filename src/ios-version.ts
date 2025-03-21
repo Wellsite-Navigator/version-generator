@@ -109,17 +109,6 @@ export interface IosExecutor {
 export type IosVersionProvider = (options: IosVersionOptions) => Promise<number>;
 
 /**
- * Gets the iOS build number from App Store Connect API
- *
- * @param options - Options for getting the iOS build number
- * @returns Promise resolving to the next iOS build number to use
- */
-export async function getIosBuildNumber(options: IosVersionOptions): Promise<number> {
-  const buildNumberInfo = await getIosBuildNumberInfo(options);
-  return parseInt(buildNumberInfo.buildVersion.replace('.', ''));
-}
-
-/**
  * Gets detailed iOS build number information
  *
  * @param options - Options for getting the iOS build number
@@ -175,9 +164,34 @@ export class DefaultIosExecutor implements IosExecutor {
     const encodedBundleId = encodeURIComponent(bundleId);
     const encodedVersion = encodeURIComponent(appReleaseVersion);
 
-    // Construct the API URL with filters for bundle ID and version
-    const url = `https://api.appstoreconnect.apple.com/v1/builds?filter[app.bundleId]=${encodedBundleId}&filter[version]=${encodedVersion}`;
+    // First, we need to find the app ID using the bundle ID
+    const appUrl = `https://api.appstoreconnect.apple.com/v1/apps?filter[bundleId]=${encodedBundleId}`;
 
+    // Get the app info first
+    const appInfo = await this.makeApiRequest(appUrl, token);
+
+    // Check if we found the app
+    if (!appInfo.data || appInfo.data.length === 0) {
+      throw new Error(`No app found with bundle ID: ${bundleId}`);
+    }
+
+    // Get the app ID from the response
+    const appId = appInfo.data[0].id;
+
+    // Now construct the URL for builds with the app ID and version
+    const url = `https://api.appstoreconnect.apple.com/v1/builds?filter[app]=${appId}&filter[version]=${encodedVersion}`;
+
+    return this.makeApiRequest(url, token);
+  }
+
+  /**
+   * Makes a request to the App Store Connect API
+   *
+   * @param url - The API URL to request
+   * @param token - The JWT token for authentication
+   * @returns Promise resolving to the API response data
+   */
+  private makeApiRequest(url: string, token: string): Promise<any> {
     return new Promise((resolve, reject) => {
       const req = https.get(
         url,

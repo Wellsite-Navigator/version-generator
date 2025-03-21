@@ -1,8 +1,8 @@
 import { execSync } from 'child_process';
-import { getAndroidVersionCode, AndroidVersionOptions } from './android-version';
-import { getIosBuildNumber, getIosBuildNumberInfo, IosVersionOptions, IosBuildNumberInfo } from './ios-version';
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { AndroidVersionOptions, getAndroidVersionCode } from './android-version';
+import { getIosBuildNumberInfo, IosVersionOptions } from './ios-version';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 import * as https from 'https';
 
 /**
@@ -423,16 +423,14 @@ export async function generatePackageVersion(
       commitHash,
     });
 
-    // Store both the numeric and string representations
+    //ios build number is a monotomically increasing value for the specific shortVersionString
+    iosBuildNumber = buildNumberInfo.buildNumber;
+
+    //This is what we end up setting in the IPA. it's the combination of the buildNumber and the commit hash.
     iosBuildNumberString = buildNumberInfo.buildVersion;
 
-    // Convert to number for backward compatibility
-    const buildNumber = parseInt(buildNumberInfo.buildVersion.replace('.', ''));
-
-    // Only set iosBuildNumber if a valid build number was returned
-    if (buildNumber > 0) {
-      iosBuildNumber = buildNumber;
-    } else {
+    // Ensure we were able to retrieve a build number, otherwise we fail.
+    if (iosBuildNumber <= 0) {
       throw new Error('iOS build number generation failed: returned invalid build number');
     }
   }
