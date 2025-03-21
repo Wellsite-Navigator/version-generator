@@ -9,7 +9,7 @@ jest.mock('./index', () => ({
     patch: 3,
     branchName: 'test',
     commitHash: 'abc123',
-    version: '1.2.3-test-abc123'
+    version: '1.2.3-test-abc123',
   }),
 }));
 
@@ -39,7 +39,7 @@ describe('CLI', () => {
       patch: 3,
       branchName: 'test',
       commitHash: 'abc123',
-      version: '1.2.3-test-abc123'
+      version: '1.2.3-test-abc123',
     });
     expect(mockConsoleLog).toHaveBeenCalledWith('1.2.3-test-abc123');
   });
@@ -56,7 +56,7 @@ describe('CLI', () => {
       patch: 3,
       branchName: 'test',
       commitHash: 'abc123',
-      version: '1.2.3-test-abc123'
+      version: '1.2.3-test-abc123',
     };
     expect(result).toEqual(expectedVersionInfo);
     expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(expectedVersionInfo, null, 2));
@@ -67,14 +67,16 @@ describe('CLI', () => {
     const result = await runVersionGenerator('/test/root', 'path/to/version.json');
 
     // Verify
-    expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', 'path/to/version.json', { android: undefined });
+    expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', 'path/to/version.json', {
+      android: undefined,
+    });
     expect(result).toEqual({
       major: '1',
       minor: '2',
       patch: 3,
       branchName: 'test',
       commitHash: 'abc123',
-      version: '1.2.3-test-abc123'
+      version: '1.2.3-test-abc123',
     });
     expect(mockConsoleLog).toHaveBeenCalledWith('Successfully generated version: 1.2.3-test-abc123');
   });
@@ -93,7 +95,7 @@ describe('CLI', () => {
       packageName: 'com.example.app',
       serviceAccountKey: '{}',
       track: 'production',
-      majorVersionIncrement: 20
+      majorVersionIncrement: 20,
     };
     const result = await runVersionGenerator('/test/root', undefined, 'string', androidOptions);
 
@@ -105,8 +107,8 @@ describe('CLI', () => {
         serviceAccountKey: '{}',
         track: 'production',
         majorVersionIncrement: 20,
-        currentMajorVersion: 0
-      }
+        currentMajorVersion: 0,
+      },
     });
     expect(result).toEqual({
       major: '1',
@@ -114,7 +116,7 @@ describe('CLI', () => {
       patch: 3,
       branchName: 'test',
       commitHash: 'abc123',
-      version: '1.2.3-test-abc123'
+      version: '1.2.3-test-abc123',
     });
     expect(mockConsoleLog).toHaveBeenCalledWith('1.2.3-test-abc123');
   });

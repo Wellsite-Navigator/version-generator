@@ -113,7 +113,7 @@ runs:
           ANDROID_OPTIONS="--android"
           
           if [ ! -z "${{ inputs.android-package }}" ]; then
-            ANDROID_OPTIONS="$ANDROID_OPTIONS --android-package \"${{ inputs.android-package }}\""
+            ANDROID_OPTIONS="$ANDROID_OPTIONS --android-package ${{ inputs.android-package }}"
           fi
           
           if [ ! -z "${{ inputs.android-service-account-key }}" ]; then
@@ -121,11 +121,11 @@ runs:
           fi
           
           if [ ! -z "${{ inputs.android-track }}" ]; then
-            ANDROID_OPTIONS="$ANDROID_OPTIONS --android-track \"${{ inputs.android-track }}\""
+            ANDROID_OPTIONS="$ANDROID_OPTIONS --android-track ${{ inputs.android-track }}"
           fi
           
           if [ ! -z "${{ inputs.android-major-increment }}" ]; then
-            ANDROID_OPTIONS="$ANDROID_OPTIONS --android-major-increment \"${{ inputs.android-major-increment }}\""
+            ANDROID_OPTIONS="$ANDROID_OPTIONS --android-major-increment ${{ inputs.android-major-increment }}"
           fi
         fi
         
@@ -135,15 +135,15 @@ runs:
           IOS_OPTIONS="--ios"
           
           if [ ! -z "${{ inputs.ios-bundle-id }}" ]; then
-            IOS_OPTIONS="$IOS_OPTIONS --ios-bundle-id \"${{ inputs.ios-bundle-id }}\""
+            IOS_OPTIONS="$IOS_OPTIONS --ios-bundle-id ${{ inputs.ios-bundle-id }}"
           fi
           
           if [ ! -z "${{ inputs.ios-api-key-id }}" ]; then
-            IOS_OPTIONS="$IOS_OPTIONS --ios-api-key-id \"${{ inputs.ios-api-key-id }}\""
+            IOS_OPTIONS="$IOS_OPTIONS --ios-api-key-id ${{ inputs.ios-api-key-id }}"
           fi
           
           if [ ! -z "${{ inputs.ios-api-issuer-id }}" ]; then
-            IOS_OPTIONS="$IOS_OPTIONS --ios-api-issuer-id \"${{ inputs.ios-api-issuer-id }}\""
+            IOS_OPTIONS="$IOS_OPTIONS --ios-api-issuer-id ${{ inputs.ios-api-issuer-id }}"
           fi
           
           if [ ! -z "${{ inputs.ios-api-private-key }}" ]; then

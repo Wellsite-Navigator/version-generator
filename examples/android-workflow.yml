@@ -1,0 +1,49 @@
+name: Generate Version Files
+
+on:
+  workflow_dispatch:  # Allow manual triggering
+  push:  # Run on any push to any branch
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  generate-version:
+    name: Generate Version Files
+    runs-on: ubuntu-latest
+    env:
+      SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_BASE64 }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 # shallow clone. # of commits comes from an API call in our script
+          fetch-tags: true # need to explicitly fetch tags, which doesn't really work.
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'          
+
+      - name: Generate Version
+        id: android-version
+        uses: Wellsite-Navigator/version-generator@v1
+        with:
+          root-dir: '.'
+          destination: 'version.json'
+          format: 'json'
+          android: true
+          android-package: com.sample.androidapp
+          android-service-account-key: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_BASE64 }}
+
+      - name: Display generated version files
+        run: |
+          echo "Version JSON file:"
+          cat version.json     
+          echo ""     
+          echo ""
+          echo "✅ Version Generated: ${{ steps.android-version.outputs.version }}"
+          echo "✅ Release Version Generated: ${{ steps.android-version.outputs.appReleaseVersion }}"
+          echo "✅ versionCode Generated: ${{ steps.android-version.outputs.androidVersionCode }}"
+          echo ""

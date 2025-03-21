@@ -4,6 +4,7 @@
  */
 
 import { google } from 'googleapis';
+import { parseJSONValue } from './base64';
 
 /**
  * Default increment to add to version code when major version changes
@@ -31,26 +32,18 @@ export interface PlayStoreTrackData {
  */
 export interface AndroidExecutor {
   /**
-   * Parse service account key (handles JSON or base64-encoded JSON)
-   * 
-   * @param serviceAccountKey - The service account key to parse
-   * @returns The parsed credentials
-   */
-  parseServiceAccountKey(serviceAccountKey: string): any;
-  
-  /**
    * Query a specific track from the Play Store API
-   * 
+   *
    * @param packageName - The package name of the Android app
    * @param credentials - The parsed service account credentials
    * @param track - The track to query
    * @returns Promise resolving to the track data
    */
   queryTrack(packageName: string, credentials: any, track: string): Promise<PlayStoreTrackData | undefined>;
-  
+
   /**
    * Query all tracks from the Play Store API
-   * 
+   *
    * @param packageName - The package name of the Android app
    * @param credentials - The parsed service account credentials
    * @returns Promise resolving to an array of track data
@@ -66,29 +59,29 @@ export interface AndroidVersionOptions {
    * Whether Android version code generation is enabled
    */
   enabled?: boolean;
-  
+
   /**
    * Package name of the Android app
    */
   packageName?: string;
-  
+
   /**
    * Service account key JSON for Google Play API authentication
    * Can be either a JSON string or a base64-encoded JSON string
    */
   serviceAccountKey?: string;
-  
+
   /**
    * Track to check for version codes (if not specified, checks all tracks)
    */
   track?: string;
-  
+
   /**
    * Increment to add to version code when major version changes
    * @default 10
    */
   majorVersionIncrement?: number;
-  
+
   /**
    * Current major version from app version
    */
@@ -103,7 +96,7 @@ export interface PlayStoreVersionInfo {
    * The highest version code found
    */
   highestVersionCode: number;
-  
+
   /**
    * The major version associated with the highest version code
    */
@@ -115,30 +108,8 @@ export interface PlayStoreVersionInfo {
  */
 export class DefaultAndroidExecutor implements AndroidExecutor {
   /**
-   * Parse service account key (handles JSON or base64-encoded JSON)
-   * 
-   * @param serviceAccountKey - The service account key to parse
-   * @returns The parsed credentials
-   */
-  parseServiceAccountKey(serviceAccountKey: string): any {
-    try {
-      // Try to parse as JSON first
-      return JSON.parse(serviceAccountKey);
-    } catch (e) {
-      // If parsing fails, try to decode from base64
-      try {
-        const decoded = Buffer.from(serviceAccountKey, 'base64').toString('utf-8');
-        // Verify the decoded string is valid JSON
-        return JSON.parse(decoded);
-      } catch (decodeError) {
-        throw new Error('Service account key is neither valid JSON nor valid base64-encoded JSON');
-      }
-    }
-  }
-  
-  /**
    * Create an authenticated Google Play API client
-   * 
+   *
    * @param credentials - The parsed service account credentials
    * @returns The authenticated API client
    */
@@ -146,59 +117,66 @@ export class DefaultAndroidExecutor implements AndroidExecutor {
     // Create auth client with the parsed credentials
     const auth = new google.auth.GoogleAuth({
       credentials: credentials,
-      scopes: ['https://www.googleapis.com/auth/androidpublisher']
+      scopes: ['https://www.googleapis.com/auth/androidpublisher'],
     });
 
     // Create the Android Publisher client
     return google.androidpublisher({
       version: 'v3',
-      auth
+      auth,
     });
   }
-  
+
   /**
    * Query a specific track from the Play Store API
-   * 
+   *
    * @param packageName - The package name of the Android app
    * @param credentials - The parsed service account credentials
    * @param track - The track to query
    * @returns Promise resolving to the track data
    */
   async queryTrack(packageName: string, credentials: any, track: string): Promise<PlayStoreTrackData | undefined> {
+    // Remove quotes if the package name is wrapped in quotes
+    if (typeof packageName === 'string' && packageName.startsWith('"') && packageName.endsWith('"')) {
+      packageName = packageName.slice(1, -1);
+    }
+
     const androidPublisher = this.createApiClient(credentials);
-    
+
     try {
       // Create a temporary edit to get track information
       const edit = await androidPublisher.edits.insert({
-        packageName
+        packageName,
       });
-      
+
       const editId = edit.data.id;
       if (!editId) {
         throw new Error('Failed to create edit');
       }
-      
+
       try {
         const trackInfo = await androidPublisher.edits.tracks.get({
           packageName,
           editId,
-          track
+          track,
         });
 
         return {
           track,
-          releases: trackInfo.data.releases || []
+          releases: trackInfo.data.releases || [],
         };
       } finally {
         // Always try to delete the edit when done
         try {
           await androidPublisher.edits.delete({
             packageName,
-            editId
+            editId,
           });
         } catch (deleteError) {
           // Just log this error since we're already in an error handling block
-          console.warn(`Error deleting edit: ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`);
+          console.warn(
+            `Error deleting edit: ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`,
+          );
         }
       }
     } catch (error) {
@@ -207,52 +185,59 @@ export class DefaultAndroidExecutor implements AndroidExecutor {
       return undefined;
     }
   }
-  
+
   /**
    * Query all tracks from the Play Store API
-   * 
+   *
    * @param packageName - The package name of the Android app
    * @param credentials - The parsed service account credentials
    * @returns Promise resolving to an array of track data
    */
   async queryAllTracks(packageName: string, credentials: any): Promise<PlayStoreTrackData[]> {
+    // Remove quotes if the package name is wrapped in quotes
+    if (typeof packageName === 'string' && packageName.startsWith('"') && packageName.endsWith('"')) {
+      packageName = packageName.slice(1, -1);
+    }
+
     const androidPublisher = this.createApiClient(credentials);
-    
+
     try {
       // Create a temporary edit to get all tracks
       const edit = await androidPublisher.edits.insert({
-        packageName
+        packageName,
       });
-      
+
       const editId = edit.data.id;
       if (!editId) {
         throw new Error('Failed to create edit');
       }
-      
+
       try {
         const allTracks = await androidPublisher.edits.tracks.list({
           packageName,
-          editId
+          editId,
         });
 
         if (!allTracks.data.tracks) {
           return [];
         }
-        
-        return allTracks.data.tracks.map(track => ({
+
+        return allTracks.data.tracks.map((track) => ({
           track: track.track || undefined, // Convert null to undefined to match our interface
-          releases: track.releases || []
+          releases: track.releases || [],
         }));
       } finally {
         // Always try to delete the edit when done
         try {
           await androidPublisher.edits.delete({
             packageName,
-            editId
+            editId,
           });
         } catch (deleteError) {
           // Just log this error since we're already in an error handling block
-          console.warn(`Error deleting edit: ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`);
+          console.warn(
+            `Error deleting edit: ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`,
+          );
         }
       }
     } catch (error) {
@@ -270,13 +255,13 @@ export class DefaultAndroidExecutor implements AndroidExecutor {
  */
 export async function getAndroidVersionCode(
   options: AndroidVersionOptions,
-  executor: AndroidExecutor = new DefaultAndroidExecutor()
+  executor: AndroidExecutor = new DefaultAndroidExecutor(),
 ): Promise<number> {
   // Check if Android version code generation is enabled
   if (!options.enabled) {
     return 0; // Return 0 to indicate not enabled (will be filtered out in index.ts)
   }
-  
+
   // Check if required options are provided
   if (!options.packageName || !options.serviceAccountKey) {
     throw new Error('Missing required Android options: packageName and serviceAccountKey');
@@ -288,7 +273,7 @@ export async function getAndroidVersionCode(
       options.packageName,
       options.serviceAccountKey,
       options.track,
-      executor
+      executor,
     );
 
     if (!currentVersionInfo) {
@@ -314,7 +299,7 @@ export async function getAndroidVersionCode(
 
 /**
  * Helper function to process releases and find the highest version code
- * 
+ *
  * @param releases - Array of releases to process
  * @param currentHighestVersionCode - Current highest version code found
  * @param currentMajorVersion - Current major version found
@@ -323,11 +308,11 @@ export async function getAndroidVersionCode(
 export function processReleases(
   releases: any[],
   currentHighestVersionCode: number = 0,
-  currentMajorVersion: number = 0
+  currentMajorVersion: number = 0,
 ): { highestVersionCode: number; majorVersion: number } {
   let highestVersionCode = currentHighestVersionCode;
   let majorVersion = currentMajorVersion;
-  
+
   for (const release of releases) {
     if (release.versionCodes && release.versionCodes.length > 0) {
       for (const versionCodeStr of release.versionCodes) {
@@ -336,7 +321,7 @@ export function processReleases(
           highestVersionCode = versionCode;
           // Try to extract major version from name if available
           if (release.name) {
-            const versionMatch = release.name.match(/^(\d+)\./); 
+            const versionMatch = release.name.match(/^(\d+)\./);
             if (versionMatch) {
               majorVersion = parseInt(versionMatch[1], 10);
             }
@@ -345,13 +330,13 @@ export function processReleases(
       }
     }
   }
-  
+
   return { highestVersionCode, majorVersion };
 }
 
 /**
  * Gets the version info from the Play Store
- * 
+ *
  * @param packageName - The package name of the Android app
  * @param serviceAccountKey - The service account key for authentication
  * @param track - The track to get the version info from (optional)
@@ -362,14 +347,13 @@ export async function getPlayStoreVersionInfo(
   packageName: string,
   serviceAccountKey: string,
   track?: string,
-  executor: AndroidExecutor = new DefaultAndroidExecutor()
+  executor: AndroidExecutor = new DefaultAndroidExecutor(),
 ): Promise<PlayStoreVersionInfo | undefined> {
   try {
     // Parse the service account key
-    const credentials = executor.parseServiceAccountKey(serviceAccountKey);
-    
+    const credentials = parseJSONValue(serviceAccountKey);
     let trackData: PlayStoreTrackData[] = [];
-    
+
     // If a specific track is provided, try to get that track's info first
     if (track) {
       const specificTrackData = await executor.queryTrack(packageName, credentials, track);
@@ -377,13 +361,13 @@ export async function getPlayStoreVersionInfo(
         trackData.push(specificTrackData);
       }
     }
-    
+
     // If no specific track was provided or no data was found in the specific track,
     // query all tracks
     if (trackData.length === 0) {
       trackData = await executor.queryAllTracks(packageName, credentials);
     }
-    
+
     // Process the track data to find the highest version code
     return processTrackData(trackData);
   } catch (error) {
@@ -393,7 +377,7 @@ export async function getPlayStoreVersionInfo(
 
 /**
  * Process track data to find the highest version code and associated major version
- * 
+ *
  * @param trackData - Array of track data to process
  * @returns The version info with highest version code and major version
  */
@@ -401,10 +385,10 @@ export function processTrackData(trackData: PlayStoreTrackData[]): PlayStoreVers
   if (trackData.length === 0) {
     return undefined;
   }
-  
+
   let highestVersionCode = 0;
   let majorVersion = 0;
-  
+
   // Process each track to find the highest version code
   for (const track of trackData) {
     if (track.releases && track.releases.length > 0) {
@@ -417,11 +401,10 @@ export function processTrackData(trackData: PlayStoreTrackData[]): PlayStoreVers
       }
     }
   }
-  
+
   if (highestVersionCode === 0) {
     return undefined;
   }
-  
+
   return { highestVersionCode, majorVersion };
 }
-

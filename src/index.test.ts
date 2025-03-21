@@ -24,7 +24,7 @@ describe('Version Generator', () => {
     if (fs.existsSync(tempDir)) {
       // Simple cleanup for directories with no nested content
       try {
-        fs.rmdirSync(tempDir, { recursive: true });
+        fs.rmSync(tempDir, { recursive: true, force: true });
       } catch (error) {
         console.error(`Error cleaning up temp directory: ${error}`);
       }
@@ -111,7 +111,7 @@ describe('Version Generator', () => {
         branchName: 'main',
         commitHash: 'abc123',
         version: version,
-        appReleaseVersion: '1.0.0'
+        appReleaseVersion: '1.0.0',
       };
 
       // Execute
@@ -145,11 +145,16 @@ describe('Version Generator', () => {
       };
 
       // Execute
-      const result = await index.getLatestTag({ executor: mockTagExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' }});
+      const result = await index.getLatestTag({
+        executor: mockTagExecutor,
+        env: { ...process.env, GITHUB_ACTIONS: 'false' },
+      });
 
       // Verify
       expect(result).toBe('v1.2');
-      expect(mockTagExecutor.execCommand).toHaveBeenCalledWith('git tag --list "v*.*" --sort=-creatordate --merged HEAD');
+      expect(mockTagExecutor.execCommand).toHaveBeenCalledWith(
+        'git tag --list "v*.*" --sort=-creatordate --merged HEAD',
+      );
     });
 
     it('should return tag v0.0 when using a mock executor that returns it', async () => {
@@ -169,7 +174,10 @@ describe('Version Generator', () => {
       };
 
       // Execute
-      const result = await index.getLatestTag({ executor: mockExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false', GITHUB_TOKEN: 'mock-token' }});
+      const result = await index.getLatestTag({
+        executor: mockExecutor,
+        env: { ...process.env, GITHUB_ACTIONS: 'false', GITHUB_TOKEN: 'mock-token' },
+      });
 
       // Verify
       expect(result).toBe('v0.0');
@@ -194,8 +202,8 @@ describe('Version Generator', () => {
 
       // Execute and verify
       await expect(
-        index.getLatestTag({ executor: mockNoTagsExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' }})
-      ).rejects.toThrow("No tags matching v*.* pattern found in repository ancestry");
+        index.getLatestTag({ executor: mockNoTagsExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' } }),
+      ).rejects.toThrow('No tags matching v*.* pattern found in repository ancestry');
     });
 
     it('should reject when tags match v*.* pattern but not vX.Y format', async () => {
@@ -216,8 +224,8 @@ describe('Version Generator', () => {
 
       // Execute and verify
       await expect(
-        index.getLatestTag({ executor: mockInvalidFormatExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' }})
-      ).rejects.toThrow("No tags matching the required format vX.Y found in repository ancestry");
+        index.getLatestTag({ executor: mockInvalidFormatExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' } }),
+      ).rejects.toThrow('No tags matching the required format vX.Y found in repository ancestry');
     });
 
     it('should throw an error when git command fails', async () => {
@@ -234,7 +242,12 @@ describe('Version Generator', () => {
       };
 
       // Execute & Verify
-      await expect(index.getLatestTag({ executor: mockExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false', GITHUB_TOKEN: 'mock-token' }})).rejects.toThrow('No git tags found');
+      await expect(
+        index.getLatestTag({
+          executor: mockExecutor,
+          env: { ...process.env, GITHUB_ACTIONS: 'false', GITHUB_TOKEN: 'mock-token' },
+        }),
+      ).rejects.toThrow('No git tags found');
     });
   });
 
@@ -251,8 +264,10 @@ describe('Version Generator', () => {
       };
 
       // Execute
-      const result = await index.getCommitCount('v1.2', { executor: mockCountExecutor, 
-        env: {...process.env, GITHUB_ACTIONS: 'false'} });
+      const result = await index.getCommitCount('v1.2', {
+        executor: mockCountExecutor,
+        env: { ...process.env, GITHUB_ACTIONS: 'false' },
+      });
 
       // Verify
       expect(result).toBe(42);
@@ -271,8 +286,10 @@ describe('Version Generator', () => {
       };
 
       // Execute
-      const result = await index.getCommitCount('v1.2', { executor: customExecutor, 
-        env: {...process.env, GITHUB_ACTIONS: 'false'} });
+      const result = await index.getCommitCount('v1.2', {
+        executor: customExecutor,
+        env: { ...process.env, GITHUB_ACTIONS: 'false' },
+      });
 
       // Verify
       expect(result).toBe(123);
@@ -743,7 +760,10 @@ describe('generatePackageVersion', () => {
     };
 
     // Setup - use the custom executor
-    const result = await index.generatePackageVersion(undefined, { executor: packageVersionExecutor, env: {...process.env, GITHUB_ACTIONS: 'false'} });
+    const result = await index.generatePackageVersion(undefined, {
+      executor: packageVersionExecutor,
+      env: { ...process.env, GITHUB_ACTIONS: 'false' },
+    });
 
     // Verify the result format
     expect(result).toHaveProperty('version');
@@ -770,9 +790,12 @@ describe('generatePackageVersion', () => {
     };
 
     // Execute & Verify
-    await expect(index.generatePackageVersion(undefined, { executor: invalidTagExecutor, env: {...process.env, GITHUB_ACTIONS: 'false'}})).rejects.toThrow(
-      'No tags matching v*.* pattern found in repository ancestry',
-    );
+    await expect(
+      index.generatePackageVersion(undefined, {
+        executor: invalidTagExecutor,
+        env: { ...process.env, GITHUB_ACTIONS: 'false' },
+      }),
+    ).rejects.toThrow('No tags matching v*.* pattern found in repository ancestry');
   });
 
   it('should throw an error if tags match v*.* pattern but not vX.Y format', async () => {
@@ -792,9 +815,12 @@ describe('generatePackageVersion', () => {
     };
 
     // Execute & Verify
-    await expect(index.generatePackageVersion(undefined, { executor: majorVersionTagExecutor, env: {...process.env, GITHUB_ACTIONS: 'false'} })).rejects.toThrow(
-      'No tags matching the required format vX.Y found in repository ancestry',
-    );
+    await expect(
+      index.generatePackageVersion(undefined, {
+        executor: majorVersionTagExecutor,
+        env: { ...process.env, GITHUB_ACTIONS: 'false' },
+      }),
+    ).rejects.toThrow('No tags matching the required format vX.Y found in repository ancestry');
   });
 
   it('should use GitHub environment variables when available', async () => {
@@ -823,7 +849,7 @@ describe('generatePackageVersion', () => {
       env: {
         GITHUB_REF_NAME: 'feature/env-branch',
         GITHUB_SHA: '1234567890abcdef',
-        GITHUB_ACTIONS: 'false'
+        GITHUB_ACTIONS: 'false',
       },
     });
 
@@ -866,11 +892,10 @@ describe('generateAndWriteVersion', () => {
     };
 
     // Execute
-    const result = await index.generateAndWriteVersion(rootDir, undefined, 
-      { 
-        executor: realExecutor, 
-        env: {...process.env, GITHUB_ACTIONS: 'false'} 
-      });
+    const result = await index.generateAndWriteVersion(rootDir, undefined, {
+      executor: realExecutor,
+      env: { ...process.env, GITHUB_ACTIONS: 'false' },
+    });
 
     // Verify
     expect(result).toHaveProperty('version');
@@ -924,11 +949,10 @@ describe('generateAndWriteVersion', () => {
     };
 
     // Execute
-    const result = await index.generateAndWriteVersion(rootDir, destination, 
-      { 
-        executor: realExecutor,
-        env: {...process.env, GITHUB_ACTIONS: 'false'}
-      });
+    const result = await index.generateAndWriteVersion(rootDir, destination, {
+      executor: realExecutor,
+      env: { ...process.env, GITHUB_ACTIONS: 'false' },
+    });
 
     // Verify
     expect(result).toHaveProperty('version');

@@ -48,7 +48,9 @@ export const defaultExecutor: Executor = {
   getGitHubData: async (url: string, env: EnvVars = process.env as EnvVars) => {
     // Fail if GITHUB_TOKEN is missing when running in GitHub Actions
     if (!env.GITHUB_TOKEN && env.GITHUB_ACTIONS === 'true') {
-      throw new Error('GITHUB_TOKEN environment variable is not set. This is required for GitHub API access when running in GitHub Actions.');
+      throw new Error(
+        'GITHUB_TOKEN environment variable is not set. This is required for GitHub API access when running in GitHub Actions.',
+      );
     }
 
     // Warn if GITHUB_TOKEN is missing but not in GitHub Actions
@@ -115,11 +117,11 @@ async function getLatestTagFromGitHub(
 
     // First find all tags that start with 'v'
     const allVTags = response.filter((tag: any) => typeof tag.name === 'string' && tag.name.startsWith('v'));
-    
+
     if (allVTags.length === 0) {
       throw new Error('No tags starting with "v" found in repository');
     }
-    
+
     // Then filter to only include tags that match the format vX.Y (e.g., v1.2)
     // This ensures we only consider proper version tags and ignore major version references like v1
     const versionTagRegex = /^v\d+\.\d+$/;
@@ -159,23 +161,25 @@ export async function getLatestTag(options: { executor?: Executor; env?: EnvVars
   try {
     // Get tags matching v*.* pattern in our ancestry and sort by creation date (newest first)
     // This will find tags like v1.2, v2.3, etc. but not v1, v2, etc.
-    const vTags = executor.execCommand('git tag --list "v*.*" --sort=-creatordate --merged HEAD').split('\n').filter(Boolean);
-    
+    const vTags = executor
+      .execCommand('git tag --list "v*.*" --sort=-creatordate --merged HEAD')
+      .split('\n')
+      .filter(Boolean);
+
     if (vTags.length === 0) {
       throw new Error('No tags matching v*.* pattern found in repository ancestry');
     }
-    
+
     // Further filter tags to match the exact vX.Y format (e.g., v1.2)
     const versionTagRegex = /^v\d+\.\d+$/;
-    const versionTags = vTags
-      .filter(tag => versionTagRegex.test(tag.trim()));
-    
+    const versionTags = vTags.filter((tag) => versionTagRegex.test(tag.trim()));
+
     // No need to sort as Git already sorted by creation date (newest first)
-    
+
     if (versionTags.length === 0) {
       throw new Error('No tags matching the required format vX.Y found in repository ancestry');
     }
-    
+
     return versionTags[0];
   } catch (error: unknown) {
     throw new Error(`No git tags found ${error instanceof Error ? error.message : String(error)}`);
@@ -314,14 +318,14 @@ export function getShortCommitHash(
 /**
  * Cleans a branch name for use in a version string
  * Removes refs/heads/ or refs/pull/ prefixes if present
- * 
+ *
  * @param branchName - The branch name to clean
  * @returns The cleaned branch name
  */
 export function cleanBranchName(branchName: string): string {
   // Remove refs/heads/ or refs/pull/ prefixes if present
   branchName = branchName.replace(/^refs\/(heads|pull)\//, '');
-  
+
   // Replace non-alphanumeric characters with hyphens
   return branchName.replace(/[^a-zA-Z0-9]/g, '-');
 }
@@ -354,8 +358,8 @@ export interface VersionInfo {
  */
 export async function generatePackageVersion(
   rootDir?: string,
-  options: { 
-    executor?: Executor; 
+  options: {
+    executor?: Executor;
     env?: EnvVars;
     android?: AndroidVersionOptions;
     ios?: IosVersionOptions;
@@ -387,19 +391,19 @@ export async function generatePackageVersion(
 
   // Generate version string in npm semver compatible format
   const version = `${major}.${minor}.${patch}-${branchName}.${commitHash}`;
-  
+
   // Generate app release version (only major.minor.patch)
   const appReleaseVersion = `${major}.${minor}.${patch}`;
-  
+
   // Get Android version code if Android options are provided
   let androidVersionCode: number | undefined;
   if (options.android?.enabled) {
     // Since Android option is explicitly enabled, we should fail if we can't generate the version code
     const versionCode = await getAndroidVersionCode({
       ...options.android,
-      currentMajorVersion: parseInt(major, 10)
+      currentMajorVersion: parseInt(major, 10),
     });
-    
+
     // Only set androidVersionCode if a valid version code was returned
     if (versionCode > 0) {
       androidVersionCode = versionCode;
@@ -407,7 +411,7 @@ export async function generatePackageVersion(
       throw new Error('Android version code generation failed: returned invalid version code');
     }
   }
-  
+
   // Get iOS build number if iOS options are provided
   let iosBuildNumber: number | undefined;
   let iosBuildNumberString: string | undefined;
@@ -416,15 +420,15 @@ export async function generatePackageVersion(
     const buildNumberInfo = await getIosBuildNumberInfo({
       ...options.ios,
       appReleaseVersion,
-      commitHash
+      commitHash,
     });
-    
+
     // Store both the numeric and string representations
     iosBuildNumberString = buildNumberInfo.buildVersion;
-    
+
     // Convert to number for backward compatibility
     const buildNumber = parseInt(buildNumberInfo.buildVersion.replace('.', ''));
-    
+
     // Only set iosBuildNumber if a valid build number was returned
     if (buildNumber > 0) {
       iosBuildNumber = buildNumber;
@@ -432,7 +436,7 @@ export async function generatePackageVersion(
       throw new Error('iOS build number generation failed: returned invalid build number');
     }
   }
-  
+
   // Return the complete version info object
   return {
     major,
@@ -444,7 +448,7 @@ export async function generatePackageVersion(
     appReleaseVersion,
     androidVersionCode,
     iosBuildNumber,
-    iosBuildNumberString
+    iosBuildNumberString,
   };
 }
 
