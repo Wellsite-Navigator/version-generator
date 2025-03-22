@@ -154,6 +154,7 @@ describe('Version Generator', () => {
       expect(result).toBe('v1.2');
       expect(mockTagExecutor.execCommand).toHaveBeenCalledWith(
         'git tag --list "v*.*" --sort=-creatordate --merged HEAD',
+        undefined,
       );
     });
 
@@ -181,7 +182,10 @@ describe('Version Generator', () => {
 
       // Verify
       expect(result).toBe('v0.0');
-      expect(mockExecutor.execCommand).toHaveBeenCalledWith('git tag --list "v*.*" --sort=-creatordate --merged HEAD');
+      expect(mockExecutor.execCommand).toHaveBeenCalledWith(
+        'git tag --list "v*.*" --sort=-creatordate --merged HEAD',
+        undefined,
+      );
     });
 
     it('should reject when no tags match the v*.* pattern', async () => {
@@ -271,7 +275,7 @@ describe('Version Generator', () => {
 
       // Verify
       expect(result).toBe(42);
-      expect(mockCountExecutor.execCommand).toHaveBeenCalledWith('git rev-list v1.2..HEAD --count');
+      expect(mockCountExecutor.execCommand).toHaveBeenCalledWith('git rev-list v1.2..HEAD --count', undefined);
     });
 
     it('should return commit count 123 when using a mock executor that returns it', async () => {
@@ -293,7 +297,7 @@ describe('Version Generator', () => {
 
       // Verify
       expect(result).toBe(123);
-      expect(customExecutor.execCommand).toHaveBeenCalledWith('git rev-list v1.2..HEAD --count');
+      expect(customExecutor.execCommand).toHaveBeenCalledWith('git rev-list v1.2..HEAD --count', undefined);
     });
 
     it('should use GitHub API when running in GitHub Actions', async () => {
@@ -552,7 +556,7 @@ describe('getCurrentBranch', () => {
 
     // Verify
     expect(result).toBe('main');
-    expect(branchExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --abbrev-ref HEAD');
+    expect(branchExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --abbrev-ref HEAD', undefined);
   });
 
   it('should throw an error when git command fails and not in test mode', () => {
@@ -623,7 +627,7 @@ describe('getCurrentBranch', () => {
 
     // Verify
     expect(result).toBe('feature-branch');
-    expect(mockBranchExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --abbrev-ref HEAD');
+    expect(mockBranchExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --abbrev-ref HEAD', undefined);
   });
 });
 
@@ -661,7 +665,7 @@ describe('getShortCommitHash', () => {
 
     // Verify
     expect(result).toBe('abcdef12');
-    expect(hashExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --short=8 HEAD');
+    expect(hashExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --short=8 HEAD', undefined);
   });
 
   it('should throw an error when git command fails and not in test mode', () => {
@@ -732,7 +736,7 @@ describe('getShortCommitHash', () => {
 
     // Verify
     expect(result).toBe('abcdef12');
-    expect(mockHashExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --short=8 HEAD');
+    expect(mockHashExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --short=8 HEAD', undefined);
   });
 });
 

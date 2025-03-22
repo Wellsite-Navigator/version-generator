@@ -20,8 +20,7 @@ jobs:
         id: version
         uses: Wellsite-Navigator/version-generator@v1
         with:
-          root-dir: '.'
-          destination: 'version.json'
+          outputFilePath: 'version.json'
           format: 'json'
       
       - name: Use Version

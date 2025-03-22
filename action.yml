@@ -6,12 +6,12 @@ branding:
   color: 'orange'
 
 inputs:
-  root-dir:
-    description: 'Root directory of the repository'
-    required: true
+  dir:
+    description: 'Directory to use for command execution and output file path'
+    required: false
     default: '.'
-  destination:
-    description: 'Destination path relative to root directory where the version file should be written'
+  outputFilePath:
+    description: 'Output file path (relative to dir if not absolute) where the version file should be written'
     required: false
   format:
     description: 'Output format (string or json)'
@@ -152,11 +152,16 @@ runs:
         fi
         
         # Always generate JSON format for parsing components
-        VERSION_JSON=$(generate-version --root-dir "${{ inputs.root-dir }}" --format json $ANDROID_OPTIONS $IOS_OPTIONS)
+        VERSION_JSON=$(generate-version --dir "${{ inputs.dir }}" --format json $ANDROID_OPTIONS $IOS_OPTIONS)
 
-        # If destination is specified, write the output in the desired format
-        if [ ! -z "${{ inputs.destination }}" ]; then
-          DEST_PATH="${{ inputs.root-dir }}/${{ inputs.destination }}"
+        # If outputFilePath is specified, write the output in the desired format
+        if [ ! -z "${{ inputs.outputFilePath }}" ]; then
+          # If outputFilePath is an absolute path, use it directly, otherwise join with dir
+          if [[ "${{ inputs.outputFilePath }}" == /* ]]; then
+            DEST_PATH="${{ inputs.outputFilePath }}"
+          else
+            DEST_PATH="${{ inputs.dir }}/${{ inputs.outputFilePath }}"
+          fi
           mkdir -p "$(dirname "$DEST_PATH")"
 
           if [ "${{ inputs.format }}" = "json" ]; then

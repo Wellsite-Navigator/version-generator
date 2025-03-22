@@ -30,8 +30,7 @@ jobs:
         id: android-version
         uses: Wellsite-Navigator/version-generator@v1
         with:
-          root-dir: '.'
-          destination: 'version.json'
+          outputFilePath: 'version.json'
           format: 'json'
           android: true
           android-package: com.sample.androidapp

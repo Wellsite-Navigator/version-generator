@@ -7,16 +7,16 @@ import { DEFAULT_MAJOR_VERSION_INCREMENT } from './android-version';
 
 /**
  * Run the version generator with the given options
- * @param rootDir - Root directory of the monorepo
- * @param destination - Optional destination path relative to root directory
+ * @param dir - Directory to use for command execution and output file path
+ * @param outputFilePath - Optional output file path (relative to dir if not absolute)
  * @param format - Output format (string or json)
  * @param androidOptions - Optional Android version code generation options
  * @param iosOptions - Optional ios version code generation options
  * @returns The generated version data
  */
 export async function runVersionGenerator(
-  rootDir: string,
-  destination?: string,
+  dir?: string,
+  outputFilePath?: string,
   format: string = 'string',
   androidOptions?: {
     enabled?: boolean;
@@ -34,8 +34,8 @@ export async function runVersionGenerator(
     apiPrivateKey?: string;
   },
 ): Promise<VersionInfo> {
-  // Resolve the root directory to an absolute path
-  const resolvedRootDir = resolve(rootDir);
+  // Resolve the directory to an absolute path, or use current working directory if not provided
+  const resolvedDir = dir ? resolve(dir) : process.cwd();
   const normalizedFormat = format.toLowerCase();
 
   // Validate format option
@@ -44,7 +44,7 @@ export async function runVersionGenerator(
   }
 
   // Generate the version
-  const versionInfo = await generateAndWriteVersion(resolvedRootDir, destination, {
+  const versionInfo = await generateAndWriteVersion(resolvedDir, outputFilePath, {
     android: androidOptions
       ? {
           enabled: androidOptions.enabled,
@@ -67,16 +67,16 @@ export async function runVersionGenerator(
       : undefined,
   });
 
-  // Output based on format and destination
-  if (!destination) {
-    // No destination - output based on format
+  // Output based on format and outputFilePath
+  if (!outputFilePath) {
+    // No output file specified - output to console based on format
     if (normalizedFormat === 'string') {
       console.log(versionInfo.version);
     } else {
       console.log(JSON.stringify(versionInfo, null, 2));
     }
   } else {
-    // Destination provided - output additional information
+    // Output file provided - output additional information
     console.log(`Successfully generated version: ${versionInfo.version}`);
   }
 
@@ -90,10 +90,13 @@ if (require.main === module) {
   program
     .name('generate-version')
     .description('Generate a version based on git information')
-    .requiredOption('-r, --root-dir <path>', 'Root directory of the monorepo')
     .option(
-      '-d, --destination <path>',
-      'Destination path relative to root directory where the version file should be written',
+      '-d, --dir <path>',
+      'Directory to use for command execution and output file path (defaults to current working directory)',
+    )
+    .option(
+      '--output-file <path>',
+      'Output file path (relative to --dir if not absolute) where the version file should be written',
     )
     .option('-f, --format <format>', 'Output format (string or json)', 'string')
     .option('--android', 'Enable Android version code generation')
@@ -137,7 +140,7 @@ if (require.main === module) {
             }
           : undefined;
 
-        await runVersionGenerator(options.rootDir, options.destination, options.format, androidOptions, iosOptions);
+        await runVersionGenerator(options.dir, options.outputFile, options.format, androidOptions, iosOptions);
       } catch (error: Error | unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error(`Error: ${errorMessage}`);

@@ -122,8 +122,8 @@ pnpm dlx @wellsite/version-generator --help
 
 #### CLI Options
 
-- `--root-dir, -r`: Root directory of the repository (**required**)
-- `--destination, -d`: Destination path (relative to the root) to write the version file (optional)
+- `--dir, -d`: Directory to use for command execution and output file path (defaults to current working directory)
+- `--output-file`: Output file path (relative to --dir if not absolute) where the version file should be written (optional)
 - `--format, -f`: Output format: `string` or `json` (default: `string`)
 - `--android`: Enable Android version code generation
 - `--android-package`: Android package name for the Play Store API
@@ -167,8 +167,7 @@ Here’s an example workflow step:
 - name: Generate version
   uses: wellsite/version-generator@v1
   with:
-    root-dir: '.'
-    destination: 'version.json'
+    outputFilePath: 'version.json'
     format: 'json'
     android: 'true'
     android-package: 'com.example.app'
@@ -182,8 +181,8 @@ Here’s an example workflow step:
 
 | Input                         | Description                                                         | Required | Default      |
 |-------------------------------|---------------------------------------------------------------------|----------|--------------|
-| `root-dir`                    | Root directory of the repository                                    | Yes      | `.`          |
-| `destination`                 | Destination path for the version file (relative to root)            | No       | –            |
+| `dir`                         | Directory to use for command execution and output file path         | No       | Current dir  |
+| `destination`                 | Destination path (relative to dir if not absolute)                  | No       | –            |
 | `format`                      | Output format (`string` or `json`)                                  | No       | `string`     |
 | `android`                     | Enable Android version code generation                             | No       | `false`      |
 | `android-package`             | Android package name for the Play Store API                          | No       | –            |
@@ -340,13 +339,15 @@ For more information on contributing and developing this project, please see [DE
 
 ## GitHub Action Versioning
 
-The project uses a systematic versioning approach by tagging the major version of each build. This enables GitHub Action workflows to pin their version of the action to the latest build of a major version. For example:
+This project uses tags to version the Github Action. Although we use our own version generator to version the published artifacts, we also 
+tag the commit in the main branch with the major version during the build. This enables users of our GitHub Action to pin the version of the action 
+to the latest major version of the build. For example:
 
 ```yaml
-uses: Wellsite-Navigator/version-generator@v1  # Uses the latest v1.x.x release via the v1 tag
+uses: Wellsite-Navigator/version-generator@v1  # Uses the latest v1.x.x-main.xxx release via the v1 tag
 ```
 
-The `@v1` syntax is shorthand for always using the latest release in the `v1` major version series.
+The `@v1` syntax is shorthand for always using the latest release in the `v1` major version series from the main branch.
 
 ---
 

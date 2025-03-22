@@ -23,7 +23,7 @@ export type EnvVars = {
  * This allows us to mock the external dependencies in tests
  */
 export interface Executor {
-  execCommand(command: string): string;
+  execCommand(command: string, cwd?: string): string;
 
   fileExists(filePath: string): boolean;
 
@@ -40,7 +40,10 @@ export interface Executor {
  * Default executor implementation using real commands
  */
 export const defaultExecutor: Executor = {
-  execCommand: (command: string) => execSync(command).toString().trim(),
+  execCommand: (command: string, cwd?: string) =>
+    execSync(command, cwd ? { cwd } : undefined)
+      .toString()
+      .trim(),
   fileExists: (filePath: string) => existsSync(filePath),
   readFile: (filePath: string) => readFileSync(filePath, 'utf8'),
   writeFile: (filePath: string, content: string) => writeFileSync(filePath, content),
@@ -145,7 +148,9 @@ async function getLatestTagFromGitHub(
  * @param options.env - Environment variables for dependency injection
  * @returns Promise resolving to the latest tag
  */
-export async function getLatestTag(options: { executor?: Executor; env?: EnvVars } = {}): Promise<string> {
+export async function getLatestTag(
+  options: { executor?: Executor; env?: EnvVars; cwd?: string } = {},
+): Promise<string> {
   const executor = options.executor || defaultExecutor;
   const env = options.env || (process.env as EnvVars);
 
@@ -161,10 +166,8 @@ export async function getLatestTag(options: { executor?: Executor; env?: EnvVars
   try {
     // Get tags matching v*.* pattern in our ancestry and sort by creation date (newest first)
     // This will find tags like v1.2, v2.3, etc. but not v1, v2, etc.
-    const vTags = executor
-      .execCommand('git tag --list "v*.*" --sort=-creatordate --merged HEAD')
-      .split('\n')
-      .filter(Boolean);
+    const gitCommand = 'git tag --list "v*.*" --sort=-creatordate --merged HEAD';
+    const vTags = executor.execCommand(gitCommand, options.cwd).split('\n').filter(Boolean);
 
     if (vTags.length === 0) {
       throw new Error('No tags matching v*.* pattern found in repository ancestry');
@@ -232,7 +235,7 @@ export async function getCommitCountFromGitHub(
  */
 export async function getCommitCount(
   fromTag: string,
-  options: { executor?: Executor; env?: EnvVars } = {},
+  options: { executor?: Executor; env?: EnvVars; cwd?: string } = {},
 ): Promise<number> {
   const executor = options.executor || defaultExecutor;
   const env = options.env || (process.env as EnvVars);
@@ -248,7 +251,8 @@ GITHUB API: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   try {
-    const count = executor.execCommand(`git rev-list ${fromTag}..HEAD --count`);
+    const gitCommand = `git rev-list ${fromTag}..HEAD --count`;
+    const count = executor.execCommand(gitCommand, options.cwd);
     return parseInt(count, 10);
   } catch (error) {
     throw new Error(`Failed to get commit count from tag ${fromTag}`);
@@ -266,6 +270,7 @@ export function getCurrentBranch(
   options: {
     executor?: Executor;
     env?: EnvVars;
+    cwd?: string;
   } = {},
 ): string {
   const executor = options.executor || defaultExecutor;
@@ -282,7 +287,8 @@ export function getCurrentBranch(
   }
 
   try {
-    return executor.execCommand('git rev-parse --abbrev-ref HEAD');
+    const gitCommand = 'git rev-parse --abbrev-ref HEAD';
+    return executor.execCommand(gitCommand, options.cwd);
   } catch (error) {
     throw new Error('Failed to get current branch');
   }
@@ -299,6 +305,7 @@ export function getShortCommitHash(
   options: {
     executor?: Executor;
     env?: EnvVars;
+    cwd?: string;
   } = {},
 ): string {
   const executor = options.executor || defaultExecutor;
@@ -309,7 +316,8 @@ export function getShortCommitHash(
   }
 
   try {
-    return executor.execCommand('git rev-parse --short=8 HEAD');
+    const gitCommand = 'git rev-parse --short=8 HEAD';
+    return executor.execCommand(gitCommand, options.cwd);
   } catch (error) {
     throw new Error('Failed to get commit hash');
   }
@@ -349,7 +357,7 @@ export interface VersionInfo {
 /**
  * Generates version information based on git information
  *
- * @param rootDir - Optional root directory
+ * @param dir - Optional directory for command execution
  * @param options - Options for version generation
  * @param options.executor - Custom executor for dependency injection
  * @param options.env - Environment variables for dependency injection
@@ -357,7 +365,7 @@ export interface VersionInfo {
  * @returns Promise resolving to the version information object
  */
 export async function generatePackageVersion(
-  rootDir?: string,
+  dir?: string,
   options: {
     executor?: Executor;
     env?: EnvVars;
@@ -369,7 +377,7 @@ export async function generatePackageVersion(
   const env = options.env || (process.env as EnvVars);
 
   // Get the latest tag (format: v<major>.<minor>)
-  const tag = await getLatestTag({ executor, env });
+  const tag = await getLatestTag({ executor, env, cwd: dir });
   if (!tag.startsWith('v')) {
     throw new Error('Tag must start with "v"');
   }
@@ -381,13 +389,13 @@ export async function generatePackageVersion(
   }
 
   // Get patch (number of commits since tag)
-  const patch = await getCommitCount(tag, { executor, env });
+  const patch = await getCommitCount(tag, { executor, env, cwd: dir });
 
   // Get branch name and clean it
-  const branchName = cleanBranchName(getCurrentBranch({ executor, env }));
+  const branchName = cleanBranchName(getCurrentBranch({ executor, env, cwd: dir }));
 
   // Get short commit hash
-  const commitHash = getShortCommitHash({ executor, env });
+  const commitHash = getShortCommitHash({ executor, env, cwd: dir });
 
   // Generate version string in npm semver compatible format
   const version = `${major}.${minor}.${patch}-${branchName}.${commitHash}`;
@@ -475,10 +483,10 @@ export function writeVersionToFile(
 }
 
 /**
- * Generates version information and optionally writes it to the specified destination as a JSON object
+ * Generates version information and optionally writes it to the specified output file as a JSON object
  *
- * @param rootDir - The root directory of the monorepo
- * @param destination - Optional destination path relative to rootDir where the version file should be written
+ * @param dir - The directory for command execution and relative path resolution (defaults to current working directory)
+ * @param outputFilePath - Optional output file path (relative to dir if not absolute) where the version file should be written
  * @param options - Options for generating and writing the version
  * @param options.executor - Custom executor for dependency injection
  * @param options.env - Environment variables for dependency injection
@@ -486,23 +494,24 @@ export function writeVersionToFile(
  * @returns Promise resolving to the version information object
  */
 export async function generateAndWriteVersion(
-  rootDir: string,
-  destination?: string,
+  dir: string,
+  outputFilePath?: string,
   options: { executor?: Executor; env?: EnvVars; android?: AndroidVersionOptions; ios?: IosVersionOptions } = {},
 ): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
   const env = options.env || (process.env as EnvVars);
 
-  const versionInfo = await generatePackageVersion(rootDir, {
+  const versionInfo = await generatePackageVersion(dir, {
     executor,
     env,
     android: options.android,
     ios: options.ios,
   });
 
-  // If a destination is provided, write the version to that location as a JSON object
-  if (destination) {
-    const versionFilePath = join(rootDir, destination);
+  // If an output file path is provided, write the version to that location as a JSON object
+  if (outputFilePath) {
+    // If outputFilePath is an absolute path, use it directly, otherwise join with dir
+    const versionFilePath = outputFilePath.startsWith('/') ? outputFilePath : join(dir, outputFilePath);
 
     // Write the version file
     writeVersionToFile(versionInfo, versionFilePath, { executor });

@@ -30,8 +30,7 @@ jobs:
         id: ios-version
         uses: Wellsite-Navigator/version-generator@v1
         with:
-          root-dir: '.'
-          destination: 'version.json'
+          outputFilePath: 'version.json'
           format: 'json'
           ios: true
           ios-bundle-id: 'com.sitefindergps.NavToWellUSPaid'
