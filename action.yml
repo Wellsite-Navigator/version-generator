@@ -80,6 +80,9 @@ outputs:
   iosBuildNumber:
     description: 'The iOS build number (if iOS build number generation is enabled)'
     value: ${{ steps.generate-version.outputs.iosBuildNumber }}
+  iosBuildNumberString:
+    description: 'The iOS build number in string format (if iOS build number generation is enabled)'
+    value: ${{ steps.generate-version.outputs.iosBuildNumberString }}
 
 runs:
   using: 'composite'
@@ -205,6 +208,12 @@ runs:
         if [ ! -z "$IOS_BUILD_NUMBER" ]; then
           echo "iosBuildNumber=${IOS_BUILD_NUMBER}" >> $GITHUB_OUTPUT
         fi
+        
+        # Extract and set iOS build number string if available
+        IOS_BUILD_NUMBER_STRING=$(echo "$VERSION_JSON" | jq -r '.iosBuildNumberString // ""')
+        if [ ! -z "$IOS_BUILD_NUMBER_STRING" ]; then
+          echo "iosBuildNumberString=${IOS_BUILD_NUMBER_STRING}" >> $GITHUB_OUTPUT
+        fi
 
         # Display output
         echo "Generated version: ${VERSION}"
@@ -217,4 +226,12 @@ runs:
         
         if [ ! -z "$ANDROID_VERSION_CODE" ]; then
           echo "Android Version Code: ${ANDROID_VERSION_CODE}"
+        fi
+        
+        if [ ! -z "$IOS_BUILD_NUMBER" ]; then
+          echo "iOS Build Number: ${IOS_BUILD_NUMBER}"
+        fi
+        
+        if [ ! -z "$IOS_BUILD_NUMBER_STRING" ]; then
+          echo "iOS Build Number String: ${IOS_BUILD_NUMBER_STRING}"
         fi
