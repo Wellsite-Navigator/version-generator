@@ -47,8 +47,8 @@ Once published, the action can be used in GitHub workflows in two ways:
 - name: Generate Version
   uses: Wellsite-Navigator/version-generator@v1
   with:
-    root-dir: '.'
-    destination: 'version.json'
+    dir: '.'
+    outputFilePath: 'version.json'
     format: 'json'
 ```
 
@@ -69,7 +69,7 @@ Once published, the action can be used in GitHub workflows in two ways:
   run: pnpm add -g @wellsite/version-generator
 
 - name: Generate Version
-  run: generate-version --root-dir . --destination version.json --format json
+  run: generate-version --dir . --output-file version.json --format json
 ```
 
 ## Version Management

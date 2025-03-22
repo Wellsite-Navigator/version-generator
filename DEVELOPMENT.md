@@ -89,10 +89,10 @@ You can also test the CLI directly:
 pnpm build
 
 # Run the CLI
-node dist/cli.js --root-dir . --format json
+node dist/cli.js --dir . --format json
 
 # Or, if you've linked the package
-generate-version --root-dir . --format json
+generate-version --dir . --format json
 ```
 
 ## Publishing
@@ -119,8 +119,8 @@ The GitHub Action is automatically available when users reference it in their wo
 - name: Generate Version
   uses: Wellsite-Navigator/version-generator@v1
   with:
-    root-dir: '.'
-    destination: 'version.json'
+    dir: '.'
+    outputFilePath: 'version.json'
     format: 'json'
 ```
 

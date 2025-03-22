@@ -46,7 +46,7 @@ jobs:
         id: generate-version
         run: |
           # Run the CLI directly from the dist directory
-          node dist/cli.js --root-dir . --format json > version_info.json
+          node dist/cli.js --format json > version_info.json
           cat version_info.json
           
           # Extract components from JSON

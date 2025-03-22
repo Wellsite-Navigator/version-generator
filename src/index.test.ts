@@ -868,7 +868,7 @@ describe('generatePackageVersion', () => {
 });
 
 describe('generateAndWriteVersion', () => {
-  it('should generate version and return object without writing to file when no destination is provided', async () => {
+  it('should generate version and return object without writing to file when no outputFilePath is provided', async () => {
     // Setup
     // Create a unique temporary directory for this test
     const rootDir = path.join(os.tmpdir(), `version-generator-test-${crypto.randomBytes(4).toString('hex')}`);
@@ -923,13 +923,13 @@ describe('generateAndWriteVersion', () => {
     expect(files.length).toBe(0);
   });
 
-  it('should generate version and write to file when destination is provided', async () => {
+  it('should generate version and write to file when outputFilePath is provided', async () => {
     // Setup
     // Create a unique temporary directory for this test
     const rootDir = path.join(os.tmpdir(), `version-generator-test-${crypto.randomBytes(4).toString('hex')}`);
     fs.mkdirSync(rootDir, { recursive: true });
-    const destination = 'nested/path/version.json'; // Use relative path as the function joins rootDir with destination
-    const expectedFilePath = path.join(rootDir, destination);
+    const outputFilePath = 'nested/path/version.json'; // Use relative path as the function joins rootDir with outputFilePath
+    const expectedFilePath = path.join(rootDir, outputFilePath);
 
     // Create a real executor that uses the file system
     const realExecutor: index.Executor = {
@@ -953,7 +953,7 @@ describe('generateAndWriteVersion', () => {
     };
 
     // Execute
-    const result = await index.generateAndWriteVersion(rootDir, destination, {
+    const result = await index.generateAndWriteVersion(rootDir, outputFilePath, {
       executor: realExecutor,
       env: { ...process.env, GITHUB_ACTIONS: 'false' },
     });
@@ -998,5 +998,5 @@ describe('generateAndWriteVersion', () => {
     expect(true).toBe(true);
   });
 
-  // The tests for generateAndWriteVersion with no destination and with destination are already covered above
+  // The tests for generateAndWriteVersion with no outputFilePath and with outputFilePath are already covered above
 });

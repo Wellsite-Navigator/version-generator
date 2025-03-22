@@ -62,7 +62,7 @@ describe('CLI', () => {
     expect(mockConsoleLog).toHaveBeenCalledWith(JSON.stringify(expectedVersionInfo, null, 2));
   });
 
-  it('should generate version and write to destination when provided', async () => {
+  it('should generate version and write to output file when provided', async () => {
     // Execute
     const result = await runVersionGenerator('/test/root', 'path/to/version.json');
 
