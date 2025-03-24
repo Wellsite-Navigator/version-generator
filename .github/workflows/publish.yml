@@ -19,7 +19,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           fetch-tags: true
 
       - name: Setup Node.js
@@ -27,11 +27,13 @@ jobs:
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.6.2
+          run_install: false
 
       - name: Install dependencies
         run: pnpm install
