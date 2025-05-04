@@ -4,19 +4,9 @@ import { getIosBuildNumberInfo, IosVersionOptions } from './ios-version';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import * as https from 'https';
+import { EnvVars as NormalizedEnvVars, normalizeEnvironment } from './normalize-env';
 
-/**
- * Environment variables type for dependency injection
- * This allows us to pass environment variables explicitly in tests
- * instead of relying on process.env
- */
-export type EnvVars = {
-  GITHUB_REF_NAME?: string;
-  GITHUB_HEAD_REF?: string;
-  GITHUB_SHA?: string;
-  NODE_ENV?: string;
-  [key: string]: string | undefined;
-};
+export type EnvVars = NormalizedEnvVars;
 
 /**
  * Executor interface for dependency injection
@@ -33,7 +23,7 @@ export interface Executor {
 
   mkdirSync(dirPath: string, options?: { recursive: boolean }): void;
 
-  getGitHubData(url: string): Promise<Record<string, unknown>>;
+  getGitHubData(url: string, env?: EnvVars): Promise<Record<string, unknown>>;
 }
 
 /**
@@ -48,17 +38,19 @@ export const defaultExecutor: Executor = {
   readFile: (filePath: string) => readFileSync(filePath, 'utf8'),
   writeFile: (filePath: string, content: string) => writeFileSync(filePath, content),
   mkdirSync: (dirPath: string, options?: { recursive: boolean }) => mkdirSync(dirPath, options),
-  getGitHubData: async (url: string, env: EnvVars = process.env as EnvVars) => {
-    // Fail if GITHUB_TOKEN is missing when running in GitHub Actions
-    if (!env.GITHUB_TOKEN && env.GITHUB_ACTIONS === 'true') {
+  getGitHubData: async (url: string, env?: EnvVars) => {
+    const normalizedEnv = normalizeEnvironment(env || (process.env as EnvVars));
+
+    // Fail if TOKEN is missing when running in CI
+    if (!normalizedEnv.TOKEN && normalizedEnv.CI === 'true') {
       throw new Error(
-        'GITHUB_TOKEN environment variable is not set. This is required for GitHub API access when running in GitHub Actions.',
+        'TOKEN environment variable is not set. This is required for GitHub API access when running in CI.',
       );
     }
 
-    // Warn if GITHUB_TOKEN is missing but not in GitHub Actions
-    if (!env.GITHUB_TOKEN && env.GITHUB_ACTIONS !== 'true') {
-      console.warn('Warning: GITHUB_TOKEN environment variable is not set. GitHub API requests may be rate-limited.');
+    // Warn if TOKEN is missing but not in CI
+    if (!normalizedEnv.TOKEN && normalizedEnv.CI !== 'true') {
+      console.warn('Warning: TOKEN environment variable is not set. GitHub API requests may be rate-limited.');
     }
 
     return new Promise((resolve, reject) => {
@@ -68,7 +60,7 @@ export const defaultExecutor: Executor = {
           headers: {
             'User-Agent': 'Node.js',
             Accept: 'application/vnd.github.v3+json',
-            ...(env.GITHUB_TOKEN ? { Authorization: `token ${env.GITHUB_TOKEN}` } : {}),
+            ...(normalizedEnv.TOKEN ? { Authorization: `token ${normalizedEnv.TOKEN}` } : {}),
           },
         },
         (res) => {
@@ -97,15 +89,15 @@ export const defaultExecutor: Executor = {
  * Gets the latest tag from GitHub API
  *
  * @param executor - Custom executor for dependency injection
- * @param env - Environment variables for dependency injection
+ * @param env - Normalized environment variables for dependency injection
  * @returns Promise resolving to the latest tag from GitHub API
  */
-async function getLatestTagFromGitHub(
-  executor: Executor = defaultExecutor,
-  env: EnvVars = process.env as EnvVars,
-): Promise<string> {
-  const owner = env.GITHUB_REPOSITORY_OWNER;
-  const repo = env.GITHUB_REPOSITORY?.split('/')[1];
+async function getLatestTagFromGitHub(executor: Executor = defaultExecutor, env: EnvVars): Promise<string> {
+  const normalizedEnv = normalizeEnvironment(env || (process.env as EnvVars));
+
+  // Use normalized environment variables
+  const owner = normalizedEnv.REPOSITORY_OWNER;
+  const repo = normalizedEnv.REPOSITORY_NAME;
 
   if (!owner || !repo) {
     throw new Error('Missing required GitHub environment variables');
@@ -113,7 +105,7 @@ async function getLatestTagFromGitHub(
 
   const url = `https://api.github.com/repos/${owner}/${repo}/tags`;
   try {
-    const response = await executor.getGitHubData(url);
+    const response = await executor.getGitHubData(url, normalizedEnv);
     if (!Array.isArray(response) || response.length === 0) {
       throw new Error('No tags found in repository');
     }
@@ -141,21 +133,62 @@ async function getLatestTagFromGitHub(
 }
 
 /**
+ * Gets the commit count from GitHub API
+ *
+ * @param fromTag - The tag to count commits from
+ * @param executor - Custom executor for dependency injection
+ * @param env - Normalized environment variables for dependency injection
+ * @returns Promise resolving to the commit count
+ */
+export async function getCommitCountFromGitHub(
+  fromTag: string,
+  executor: Executor = defaultExecutor,
+  env: EnvVars,
+): Promise<number> {
+  const normalizedEnv = normalizeEnvironment(env || (process.env as EnvVars));
+
+  // Use normalized environment variables
+  const owner = normalizedEnv.REPOSITORY_OWNER;
+  const repo = normalizedEnv.REPOSITORY_NAME;
+  const sha = normalizedEnv.SHA;
+
+  if (!owner || !repo || !sha) {
+    throw new Error('Missing required GitHub environment variables');
+  }
+
+  const url = `https://api.github.com/repos/${owner}/${repo}/compare/${fromTag}...${sha}`;
+  try {
+    const response = await executor.getGitHubData(url, normalizedEnv);
+    const aheadBy = response.ahead_by;
+    if (typeof aheadBy !== 'number') {
+      throw new Error(
+        `Invalid response from GitHub API: ahead_by is not a number: ${aheadBy}\n\n${url}\n\n${response}`,
+      );
+    }
+    return aheadBy;
+  } catch (error: unknown) {
+    throw new Error(
+      `Failed to get commit count from GitHub: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+/**
  * Gets the latest tag from git
  *
  * @param options - Options for getting the latest tag
  * @param options.executor - Custom executor for dependency injection
- * @param options.env - Environment variables for dependency injection
+ * @param options.env - Normalized environment variables for dependency injection
  * @returns Promise resolving to the latest tag
  */
 export async function getLatestTag(
   options: { executor?: Executor; env?: EnvVars; cwd?: string } = {},
 ): Promise<string> {
   const executor = options.executor || defaultExecutor;
-  const env = options.env || (process.env as EnvVars);
+  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
 
-  // If running in GitHub Actions, use the GitHub API
-  if (env.GITHUB_ACTIONS === 'true') {
+  // If running in CI, use the GitHub API
+  if (env.CI === 'true') {
     try {
       return await getLatestTagFromGitHub(executor, env);
     } catch (error) {
@@ -190,46 +223,10 @@ export async function getLatestTag(
 }
 
 /**
- * Gets the commit count from GitHub API
- *
- * @param fromTag - The tag to count commits from
- * @param executor - Custom executor for dependency injection
- * @param env
- * @returns Promise resolving to the commit count
- */
-export async function getCommitCountFromGitHub(
-  fromTag: string,
-  executor: Executor = defaultExecutor,
-  env: EnvVars = process.env as EnvVars,
-): Promise<number> {
-  const owner = env.GITHUB_REPOSITORY_OWNER;
-  const repo = env.GITHUB_REPOSITORY?.split('/')[1];
-  const sha = env.GITHUB_SHA;
-
-  if (!owner || !repo || !sha) {
-    throw new Error('Missing required GitHub environment variables');
-  }
-
-  const url = `https://api.github.com/repos/${owner}/${repo}/compare/${fromTag}...${sha}`;
-  try {
-    const response = await executor.getGitHubData(url);
-    const aheadBy = response.ahead_by;
-    if (typeof aheadBy !== 'number') {
-      throw new Error(`Invalid response from GitHub API: ahead_by is not a number: ${aheadBy}`);
-    }
-    return aheadBy;
-  } catch (error: unknown) {
-    throw new Error(
-      `Failed to get commit count from GitHub: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
-/**
  * Gets the commit count from git
  *
  * @param fromTag - The tag to count commits from
- * @param options - Options for getting commit count
+ * @param options - Options for getting the commit count
  * @param options.executor - Custom executor for dependency injection
  * @returns Promise resolving to the commit count
  */
@@ -238,15 +235,16 @@ export async function getCommitCount(
   options: { executor?: Executor; env?: EnvVars; cwd?: string } = {},
 ): Promise<number> {
   const executor = options.executor || defaultExecutor;
-  const env = options.env || (process.env as EnvVars);
+  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
 
   // No special case needed as we're failing when no tags are found
-  if (env.GITHUB_ACTIONS === 'true') {
+  if (env.CI === 'true') {
     try {
       return await getCommitCountFromGitHub(fromTag, executor, env);
     } catch (error: unknown) {
-      throw new Error(`Failed to get commit count from tag ${fromTag} via \
-GITHUB API: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to get commit count from tag ${fromTag} via GITHUB API: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -274,16 +272,11 @@ export function getCurrentBranch(
   } = {},
 ): string {
   const executor = options.executor || defaultExecutor;
-  const env = options.env || (process.env as EnvVars);
+  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
 
-  // GITHUB_HEAD_REF is set when the workflow is triggered by a pull request
-  // In this case, GITHUB_REF_NAME is incorrect (eg: refs/pull/42/merge)
-  if (env.GITHUB_HEAD_REF) {
-    return env.GITHUB_HEAD_REF;
-  }
-
-  if (env.GITHUB_REF_NAME) {
-    return env.GITHUB_REF_NAME;
+  // Use the normalized BRANCH_NAME which already handles PR vs non-PR branches
+  if (env.BRANCH_NAME) {
+    return env.BRANCH_NAME;
   }
 
   try {
@@ -309,10 +302,11 @@ export function getShortCommitHash(
   } = {},
 ): string {
   const executor = options.executor || defaultExecutor;
-  const env = options.env || (process.env as EnvVars);
+  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
 
-  if (env.GITHUB_SHA) {
-    return env.GITHUB_SHA.substring(0, 8);
+  // Use the normalized SHA
+  if (env.SHA) {
+    return env.SHA.substring(0, 8);
   }
 
   try {
@@ -360,7 +354,7 @@ export interface VersionInfo {
  * @param dir - Optional directory for command execution
  * @param options - Options for version generation
  * @param options.executor - Custom executor for dependency injection
- * @param options.env - Environment variables for dependency injection
+ * @param options.env - Normalized environment variables for dependency injection
  * @param options.android - Android version options
  * @returns Promise resolving to the version information object
  */
@@ -374,7 +368,7 @@ export async function generatePackageVersion(
   } = {},
 ): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
-  const env = options.env || (process.env as EnvVars);
+  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
 
   // Get the latest tag (format: v<major>.<minor>)
   const tag = await getLatestTag({ executor, env, cwd: dir });
@@ -465,15 +459,14 @@ export async function generatePackageVersion(
  * @param filePath - The path to write the version file to
  * @param options - Options for writing the version file
  * @param options.executor - Custom executor for dependency injection
- * @param options.env - Environment variables for dependency injection
+ * @param options.env - Normalized environment variables for dependency injection
  */
 export function writeVersionToFile(
   versionInfo: VersionInfo,
   filePath: string,
-  options: { executor?: Executor; env?: EnvVars } = {},
+  options: { executor?: Executor } = {},
 ): void {
   const executor = options.executor || defaultExecutor;
-  // We don't currently use env in this function, but include it for consistency
   const fileContent = JSON.stringify(versionInfo, null, 2);
 
   // Create directory if it doesn't exist
@@ -489,7 +482,7 @@ export function writeVersionToFile(
  * @param outputFilePath - Optional output file path (relative to dir if not absolute) where the version file should be written
  * @param options - Options for generating and writing the version
  * @param options.executor - Custom executor for dependency injection
- * @param options.env - Environment variables for dependency injection
+ * @param options.env - Normalized environment variables for dependency injection
  * @param options.android - Android version options
  * @returns Promise resolving to the version information object
  */
@@ -499,7 +492,7 @@ export async function generateAndWriteVersion(
   options: { executor?: Executor; env?: EnvVars; android?: AndroidVersionOptions; ios?: IosVersionOptions } = {},
 ): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
-  const env = options.env || (process.env as EnvVars);
+  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
 
   const versionInfo = await generatePackageVersion(dir, {
     executor,

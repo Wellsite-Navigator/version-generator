@@ -3,7 +3,7 @@ name: Publish Package
 on:
   push:
     branches:
-      - main
+      - '**'  # Matches all branches
   release:
     types: [created]
 
@@ -106,6 +106,7 @@ jobs:
           # No need to reset dist/package.json as it's not tracked by git
 
       - name: Create and push major version tag
+        if: ${{ steps.generate-version.outputs.branch == 'main' }}
         run: |
           # Extract major version component
           MAJOR_VERSION="v${{ steps.generate-version.outputs.major }}"

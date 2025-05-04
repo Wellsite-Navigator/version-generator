@@ -327,6 +327,13 @@ describe('Version Generator', () => {
       expect(result).toBe(123);
       expect(mockGithubExecutor.getGitHubData).toHaveBeenCalledWith(
         'https://api.github.com/repos/testowner/testrepo/compare/v1.2...abcdef1234567890',
+        expect.objectContaining({
+          REPOSITORY_OWNER: 'testowner',
+          REPOSITORY_NAME: 'testrepo',
+          SHA: 'abcdef1234567890',
+          TOKEN: 'mock-token',
+          CI: 'true',
+        }),
       );
     });
 
@@ -440,6 +447,12 @@ describe('getLatestTag with GitHub API', () => {
     expect(result).toBe('v1.2');
     expect(githubApiExecutor.getGitHubData).toHaveBeenCalledWith(
       'https://api.github.com/repos/Wellsite-Navigator/wellsite-portal/tags',
+      expect.objectContaining({
+        REPOSITORY_OWNER: 'Wellsite-Navigator',
+        REPOSITORY_NAME: 'wellsite-portal',
+        TOKEN: 'mock-token',
+        CI: 'true',
+      }),
     );
   });
 
