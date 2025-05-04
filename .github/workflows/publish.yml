@@ -3,7 +3,7 @@ name: Publish Package
 on:
   push:
     branches:
-      - main
+      - '**'  # Matches all branches
   release:
     types: [created]
 
