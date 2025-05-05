@@ -94,6 +94,48 @@ For app packages, both iOS and Android have specific versioning requirements.
 
 ---
 
+## Environment Variables
+
+The version generator normalizes environment variables from different CI/CD systems to ensure consistent behavior. You can explicitly set these variables or let the tool automatically detect them from your CI environment.
+
+### Normalized Environment Variables
+
+| Variable           | Description                                   | Sources (in priority order)                                                 |
+|--------------------|-----------------------------------------------|-----------------------------------------------------------------------------|
+| `TOKEN`            | GitHub access token                           | `GITHUB_TOKEN`, `TRAVIS_TOKEN`                                               |
+| `REPOSITORY_OWNER` | Repository owner/organization                 | `GITHUB_REPOSITORY_OWNER`, `VERCEL_GIT_REPO_OWNER`, `TRAVIS_REPO_SLUG` (parsed) |
+| `REPOSITORY_NAME`  | Repository name (without owner)               | `GITHUB_REPOSITORY` (parsed), `VERCEL_GIT_REPO_SLUG`, `TRAVIS_REPO_SLUG` (parsed) |
+| `SHA`              | Commit hash                                   | `GITHUB_SHA`, `VERCEL_GIT_COMMIT_SHA`, `TRAVIS_COMMIT`                      |
+| `BRANCH_NAME`      | Current branch name                           | `GITHUB_HEAD_REF` (PR source), `GITHUB_REF_NAME`, `TRAVIS_PULL_REQUEST_BRANCH` (PR source), `TRAVIS_BRANCH`, `VERCEL_GIT_COMMIT_REF` |
+| `CI`               | Indicates running in CI environment           | `GITHUB_ACTIONS`, `VERCEL`, `TRAVIS`, `CI`                                  |
+
+### CI/CD System Support
+
+The tool automatically detects and normalizes environment variables from:
+
+1. **GitHub Actions**: Uses `GITHUB_*` environment variables
+2. **Vercel**: Uses `VERCEL_*` environment variables
+3. **Travis CI**: Uses `TRAVIS_*` environment variables
+4. **Generic CI**: Uses expected environment variable directly
+
+> **Note**: When running in a CI environment, a GitHub token (`TOKEN`) is required for accessing the GitHub API. This is automatically available in GitHub Actions as `GITHUB_TOKEN`, but must be manually set in other CI systems.
+
+### Direct Usage
+
+You can also set these normalized environment variables directly in your environment, and they will be used as-is without further normalization:
+
+```bash
+# Example of directly setting normalized variables
+export TOKEN="your-github-token"
+export REPOSITORY_OWNER="your-username"
+export REPOSITORY_NAME="your-repo"
+export SHA="abcdef1234567890"
+export BRANCH_NAME="main"
+export CI="true"
+```
+
+---
+
 ## Usage
 
 ### As a CLI Tool

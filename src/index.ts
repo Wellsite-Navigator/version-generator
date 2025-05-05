@@ -23,7 +23,7 @@ export interface Executor {
 
   mkdirSync(dirPath: string, options?: { recursive: boolean }): void;
 
-  getGitHubData(url: string, env?: EnvVars): Promise<Record<string, unknown>>;
+  getGitHubData(url: string, env: EnvVars): Promise<Record<string, unknown>>;
 }
 
 /**
@@ -38,18 +38,16 @@ export const defaultExecutor: Executor = {
   readFile: (filePath: string) => readFileSync(filePath, 'utf8'),
   writeFile: (filePath: string, content: string) => writeFileSync(filePath, content),
   mkdirSync: (dirPath: string, options?: { recursive: boolean }) => mkdirSync(dirPath, options),
-  getGitHubData: async (url: string, env?: EnvVars) => {
-    const normalizedEnv = normalizeEnvironment(env || (process.env as EnvVars));
-
+  getGitHubData: async (url: string, env: EnvVars) => {
     // Fail if TOKEN is missing when running in CI
-    if (!normalizedEnv.TOKEN && normalizedEnv.CI === 'true') {
+    if (!env.TOKEN && env.CI === 'true') {
       throw new Error(
         'TOKEN environment variable is not set. This is required for GitHub API access when running in CI.',
       );
     }
 
     // Warn if TOKEN is missing but not in CI
-    if (!normalizedEnv.TOKEN && normalizedEnv.CI !== 'true') {
+    if (!env.TOKEN && env.CI !== 'true') {
       console.warn('Warning: TOKEN environment variable is not set. GitHub API requests may be rate-limited.');
     }
 
@@ -60,7 +58,7 @@ export const defaultExecutor: Executor = {
           headers: {
             'User-Agent': 'Node.js',
             Accept: 'application/vnd.github.v3+json',
-            ...(normalizedEnv.TOKEN ? { Authorization: `token ${normalizedEnv.TOKEN}` } : {}),
+            ...(env.TOKEN ? { Authorization: `token ${env.TOKEN}` } : {}),
           },
         },
         (res) => {
@@ -93,28 +91,35 @@ export const defaultExecutor: Executor = {
  * @returns Promise resolving to the latest tag from GitHub API
  */
 async function getLatestTagFromGitHub(executor: Executor = defaultExecutor, env: EnvVars): Promise<string> {
-  const normalizedEnv = normalizeEnvironment(env || (process.env as EnvVars));
-
   // Use normalized environment variables
-  const owner = normalizedEnv.REPOSITORY_OWNER;
-  const repo = normalizedEnv.REPOSITORY_NAME;
+  const owner = env.REPOSITORY_OWNER;
+  const repo = env.REPOSITORY_NAME;
 
   if (!owner || !repo) {
-    throw new Error('Missing required GitHub environment variables');
+    const missingVars = [];
+    if (!owner) missingVars.push('REPOSITORY_OWNER');
+    if (!repo) missingVars.push('REPOSITORY_NAME');
+    throw new Error(`Missing required GitHub environment variables: ${missingVars.join(', ')}`);
   }
 
   const url = `https://api.github.com/repos/${owner}/${repo}/tags`;
   try {
-    const response = await executor.getGitHubData(url, normalizedEnv);
+    const response = await executor.getGitHubData(url, env);
+
     if (!Array.isArray(response) || response.length === 0) {
-      throw new Error('No tags found in repository');
+      console.error(
+        'Unexpected response format from GitHub API:',
+        typeof response === 'object' ? JSON.stringify(response || {}, null, 2) : response,
+      );
+      throw new Error('Unexpected response format from GitHub API, URL: ' + url);
     }
 
     // First find all tags that start with 'v'
     const allVTags = response.filter((tag: any) => typeof tag.name === 'string' && tag.name.startsWith('v'));
 
     if (allVTags.length === 0) {
-      throw new Error('No tags starting with "v" found in repository');
+      console.error('Available tags:', response.map((tag: any) => tag.name).join(', '));
+      throw new Error('No tags starting with "v" found in repository, URL: ' + url);
     }
 
     // Then filter to only include tags that match the format vX.Y (e.g., v1.2)
@@ -123,12 +128,15 @@ async function getLatestTagFromGitHub(executor: Executor = defaultExecutor, env:
     const vTags = allVTags.filter((tag: any) => versionTagRegex.test(tag.name));
 
     if (vTags.length === 0) {
-      throw new Error('No tags matching the required format vX.Y found in repository');
+      console.error('Available v-tags:', allVTags.map((tag: any) => tag.name).join(', '));
+      throw new Error('No tags matching the required format vX.Y found in repository, URL: ' + url);
     }
 
     return vTags[0].name;
   } catch (error: unknown) {
-    throw new Error(`Failed to get latest tag from GitHub: ${error instanceof Error ? error.message : String(error)}`);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`GitHub API error details: ${errorMessage}`);
+    throw new Error(`Failed to get latest tag from GitHub, URL: ${url}, error: ${errorMessage}`);
   }
 }
 
@@ -145,12 +153,10 @@ export async function getCommitCountFromGitHub(
   executor: Executor = defaultExecutor,
   env: EnvVars,
 ): Promise<number> {
-  const normalizedEnv = normalizeEnvironment(env || (process.env as EnvVars));
-
   // Use normalized environment variables
-  const owner = normalizedEnv.REPOSITORY_OWNER;
-  const repo = normalizedEnv.REPOSITORY_NAME;
-  const sha = normalizedEnv.SHA;
+  const owner = env.REPOSITORY_OWNER;
+  const repo = env.REPOSITORY_NAME;
+  const sha = env.SHA;
 
   if (!owner || !repo || !sha) {
     throw new Error('Missing required GitHub environment variables');
@@ -158,7 +164,7 @@ export async function getCommitCountFromGitHub(
 
   const url = `https://api.github.com/repos/${owner}/${repo}/compare/${fromTag}...${sha}`;
   try {
-    const response = await executor.getGitHubData(url, normalizedEnv);
+    const response = await executor.getGitHubData(url, env);
     const aheadBy = response.ahead_by;
     if (typeof aheadBy !== 'number') {
       throw new Error(
@@ -179,19 +185,32 @@ export async function getCommitCountFromGitHub(
  * @param options - Options for getting the latest tag
  * @param options.executor - Custom executor for dependency injection
  * @param options.env - Normalized environment variables for dependency injection
+ * @param options.cwd - Current working directory
  * @returns Promise resolving to the latest tag
  */
-export async function getLatestTag(
-  options: { executor?: Executor; env?: EnvVars; cwd?: string } = {},
-): Promise<string> {
-  const executor = options.executor || defaultExecutor;
-  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
+export async function getLatestTag({
+  executor,
+  env,
+  cwd,
+}: {
+  executor?: Executor;
+  env: EnvVars;
+  cwd?: string;
+}): Promise<string> {
+  const resolvedExecutor = executor || defaultExecutor;
 
   // If running in CI, use the GitHub API
   if (env.CI === 'true') {
     try {
-      return await getLatestTagFromGitHub(executor, env);
+      return await getLatestTagFromGitHub(resolvedExecutor, env);
     } catch (error) {
+      // Create a debug copy of env with TOKEN masked
+      const debugEnv = { ...env };
+      debugEnv.TOKEN = debugEnv.TOKEN ? '<set and valid>' : '<unset>';
+
+      console.error('Environment variables used for GitHub API call:');
+      console.error(JSON.stringify(debugEnv, null, 2));
+
       throw new Error(`Failed to get tag from GitHub API: ${error}`);
     }
   }
@@ -200,7 +219,7 @@ export async function getLatestTag(
     // Get tags matching v*.* pattern in our ancestry and sort by creation date (newest first)
     // This will find tags like v1.2, v2.3, etc. but not v1, v2, etc.
     const gitCommand = 'git tag --list "v*.*" --sort=-creatordate --merged HEAD';
-    const vTags = executor.execCommand(gitCommand, options.cwd).split('\n').filter(Boolean);
+    const vTags = resolvedExecutor.execCommand(gitCommand, cwd).split('\n').filter(Boolean);
 
     if (vTags.length === 0) {
       throw new Error('No tags matching v*.* pattern found in repository ancestry');
@@ -228,14 +247,16 @@ export async function getLatestTag(
  * @param fromTag - The tag to count commits from
  * @param options - Options for getting the commit count
  * @param options.executor - Custom executor for dependency injection
+ * @param options.env - Normalized environment variables for dependency injection
+ * @param options.cwd - Current working directory
  * @returns Promise resolving to the commit count
  */
 export async function getCommitCount(
   fromTag: string,
-  options: { executor?: Executor; env?: EnvVars; cwd?: string } = {},
+  options: { executor?: Executor; env: EnvVars; cwd?: string },
 ): Promise<number> {
   const executor = options.executor || defaultExecutor;
-  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
+  const env = options.env;
 
   // No special case needed as we're failing when no tags are found
   if (env.CI === 'true') {
@@ -262,17 +283,13 @@ export async function getCommitCount(
  *
  * @param options - Options for getting the current branch
  * @param options.executor - Custom executor for dependency injection
+ * @param options.env - Normalized environment variables for dependency injection
+ * @param options.cwd - Current working directory
  * @returns The current branch name
  */
-export function getCurrentBranch(
-  options: {
-    executor?: Executor;
-    env?: EnvVars;
-    cwd?: string;
-  } = {},
-): string {
+export function getCurrentBranch(options: { executor?: Executor; env: EnvVars; cwd?: string }): string {
   const executor = options.executor || defaultExecutor;
-  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
+  const env = options.env;
 
   // Use the normalized BRANCH_NAME which already handles PR vs non-PR branches
   if (env.BRANCH_NAME) {
@@ -292,17 +309,13 @@ export function getCurrentBranch(
  *
  * @param options - Options for getting the short commit hash
  * @param options.executor - Custom executor for dependency injection
+ * @param options.env - Normalized environment variables for dependency injection
+ * @param options.cwd - Current working directory
  * @returns The short commit hash
  */
-export function getShortCommitHash(
-  options: {
-    executor?: Executor;
-    env?: EnvVars;
-    cwd?: string;
-  } = {},
-): string {
+export function getShortCommitHash(options: { executor?: Executor; env: EnvVars; cwd?: string }): string {
   const executor = options.executor || defaultExecutor;
-  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
+  const env = options.env;
 
   // Use the normalized SHA
   if (env.SHA) {
@@ -356,19 +369,20 @@ export interface VersionInfo {
  * @param options.executor - Custom executor for dependency injection
  * @param options.env - Normalized environment variables for dependency injection
  * @param options.android - Android version options
+ * @param options.ios - iOS version options
  * @returns Promise resolving to the version information object
  */
 export async function generatePackageVersion(
-  dir?: string,
+  dir: string,
   options: {
     executor?: Executor;
-    env?: EnvVars;
+    env: EnvVars;
     android?: AndroidVersionOptions;
     ios?: IosVersionOptions;
-  } = {},
+  },
 ): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
-  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
+  const env = options.env;
 
   // Get the latest tag (format: v<major>.<minor>)
   const tag = await getLatestTag({ executor, env, cwd: dir });
@@ -453,47 +467,50 @@ export async function generatePackageVersion(
 }
 
 /**
- * Writes the generated version to a file
- *
- * @param versionInfo - The version information to write
- * @param filePath - The path to write the version file to
- * @param options - Options for writing the version file
- * @param options.executor - Custom executor for dependency injection
- * @param options.env - Normalized environment variables for dependency injection
+ * Write version information to a file
+ * @param versionInfo - Version information object
+ * @param filePath - Path to the file to write
+ * @param options - Optional configuration
+ * @param options.executor - Custom executor for testing
+ * @param options.cwd - Current working directory
  */
 export function writeVersionToFile(
   versionInfo: VersionInfo,
   filePath: string,
-  options: { executor?: Executor } = {},
+  options: { executor: Executor; cwd: string },
 ): void {
-  const executor = options.executor || defaultExecutor;
+  // If filePath is not absolute and cwd is provided, resolve it relative to cwd
+  const resolvedFilePath = filePath.startsWith('/') || !options.cwd ? filePath : join(options.cwd, filePath);
+
   const fileContent = JSON.stringify(versionInfo, null, 2);
 
   // Create directory if it doesn't exist
-  executor.mkdirSync(dirname(filePath), { recursive: true });
+  options.executor.mkdirSync(dirname(resolvedFilePath), { recursive: true });
 
-  executor.writeFile(filePath, fileContent);
+  options.executor.writeFile(resolvedFilePath, fileContent);
 }
 
 /**
- * Generates version information and optionally writes it to the specified output file as a JSON object
- *
- * @param dir - The directory for command execution and relative path resolution (defaults to current working directory)
- * @param outputFilePath - Optional output file path (relative to dir if not absolute) where the version file should be written
- * @param options - Options for generating and writing the version
- * @param options.executor - Custom executor for dependency injection
- * @param options.env - Normalized environment variables for dependency injection
+ * Generate a version and write it to a file
+ * @param dir - Directory to use for command execution and output file path
+ * @param outputFilePath - Optional output file path (relative to dir if not absolute)
+ * @param options - Optional configuration
+ * @param options.executor - Custom executor for testing
+ * @param options.env - Environment variables
  * @param options.android - Android version options
+ * @param options.ios - iOS version options
  * @returns Promise resolving to the version information object
  */
-export async function generateAndWriteVersion(
+export async function generateAndWriteVersion( //CLI Entry Point
   dir: string,
   outputFilePath?: string,
   options: { executor?: Executor; env?: EnvVars; android?: AndroidVersionOptions; ios?: IosVersionOptions } = {},
 ): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
-  const env = normalizeEnvironment(options.env || (process.env as EnvVars));
+  // Normalize environment variables at the entry point
+  const env = normalizeEnvironment(options.env || process.env);
 
+  // Generate the version
   const versionInfo = await generatePackageVersion(dir, {
     executor,
     env,
@@ -501,13 +518,9 @@ export async function generateAndWriteVersion(
     ios: options.ios,
   });
 
-  // If an output file path is provided, write the version to that location as a JSON object
+  // If an output file path is provided, write the version to the file
   if (outputFilePath) {
-    // If outputFilePath is an absolute path, use it directly, otherwise join with dir
-    const versionFilePath = outputFilePath.startsWith('/') ? outputFilePath : join(dir, outputFilePath);
-
-    // Write the version file
-    writeVersionToFile(versionInfo, versionFilePath, { executor });
+    writeVersionToFile(versionInfo, outputFilePath, { executor, cwd: dir });
   }
 
   return versionInfo;

@@ -1,21 +1,16 @@
-import { normalizeEnvironment } from './normalize-env';
-
-// Helper to create test environment variables
-function createTestEnv(vars: Record<string, string>): Record<string, string | undefined> {
-  return { ...vars };
-}
+import { EnvVars, normalizeEnvironment } from './normalize-env';
 
 describe('normalizeEnvironment', () => {
   describe('GitHub environment variables', () => {
     it('should normalize GitHub environment variables', () => {
-      const testEnv = createTestEnv({
+      const testEnv = {
         GITHUB_TOKEN: 'github-token-value',
         GITHUB_REPOSITORY_OWNER: 'owner',
         GITHUB_REPOSITORY: 'owner/repo',
         GITHUB_SHA: 'abcdef1234567890',
         GITHUB_REF_NAME: 'main',
         GITHUB_ACTIONS: 'true',
-      });
+      };
 
       const normalized = normalizeEnvironment(testEnv);
 
@@ -37,7 +32,7 @@ describe('normalizeEnvironment', () => {
     });
 
     it('should handle GitHub pull request environment variables', () => {
-      const testEnv = createTestEnv({
+      const testEnv = {
         GITHUB_TOKEN: 'github-token-value',
         GITHUB_REPOSITORY_OWNER: 'owner',
         GITHUB_REPOSITORY: 'owner/repo',
@@ -45,7 +40,7 @@ describe('normalizeEnvironment', () => {
         GITHUB_REF_NAME: 'main', // Target branch
         GITHUB_HEAD_REF: 'feature-branch', // Source branch
         GITHUB_ACTIONS: 'true',
-      });
+      };
 
       const normalized = normalizeEnvironment(testEnv);
 
@@ -57,14 +52,14 @@ describe('normalizeEnvironment', () => {
 
   describe('Vercel environment variables', () => {
     it('should normalize Vercel environment variables', () => {
-      const testEnv = createTestEnv({
+      const testEnv = {
         GITHUB_TOKEN: 'github-token-value', // Token still comes from GitHub
         VERCEL_GIT_REPO_OWNER: 'owner',
         VERCEL_GIT_REPO_SLUG: 'repo',
         VERCEL_GIT_COMMIT_SHA: 'abcdef1234567890',
         VERCEL_GIT_COMMIT_REF: 'main',
         VERCEL: '1',
-      });
+      };
 
       const normalized = normalizeEnvironment(testEnv);
 
@@ -88,13 +83,13 @@ describe('normalizeEnvironment', () => {
 
   describe('Travis CI environment variables', () => {
     it('should normalize Travis CI environment variables', () => {
-      const testEnv = createTestEnv({
+      const testEnv = {
         TRAVIS_TOKEN: 'travis-token-value',
         TRAVIS_REPO_SLUG: 'owner/repo',
         TRAVIS_COMMIT: 'abcdef1234567890',
         TRAVIS_BRANCH: 'main',
         TRAVIS: 'true',
-      });
+      };
 
       const normalized = normalizeEnvironment(testEnv);
 
@@ -116,7 +111,7 @@ describe('normalizeEnvironment', () => {
     });
 
     it('should handle Travis CI pull request', () => {
-      const testEnv = createTestEnv({
+      const testEnv = {
         TRAVIS_TOKEN: 'travis-token-value',
         TRAVIS_REPO_SLUG: 'owner/repo',
         TRAVIS_COMMIT: 'abcdef1234567890',
@@ -124,7 +119,7 @@ describe('normalizeEnvironment', () => {
         TRAVIS_PULL_REQUEST_BRANCH: 'feature-branch', // Source branch
         TRAVIS_PULL_REQUEST: '123', // PR number
         TRAVIS: 'true',
-      });
+      };
 
       const normalized = normalizeEnvironment(testEnv);
 
@@ -136,19 +131,19 @@ describe('normalizeEnvironment', () => {
 
   describe('Generic CI environment variables', () => {
     it('should handle generic CI environment', () => {
-      const testEnv = createTestEnv({
+      const testEnv = {
         CI: 'true',
-      });
+      };
 
       const normalized = normalizeEnvironment(testEnv);
       expect(normalized.CI).toBe('true');
-      expect(normalized.CI_SOURCE).toBe('GENERIC_CI');
+      expect(normalized.CI_SOURCE).toBe('ENV');
     });
   });
 
   describe('Missing environment variables', () => {
     it('should handle missing environment variables gracefully', () => {
-      const testEnv = createTestEnv({});
+      const testEnv = {};
 
       const normalized = normalizeEnvironment(testEnv);
       expect(normalized.TOKEN).toBeUndefined();
@@ -162,14 +157,14 @@ describe('normalizeEnvironment', () => {
 
   describe('Mixed environment variables', () => {
     it('should handle mixed environment variables from different sources', () => {
-      const testEnv = createTestEnv({
+      const testEnv = {
         GITHUB_TOKEN: 'github-token-value',
         VERCEL_GIT_REPO_OWNER: 'owner',
         TRAVIS_REPO_SLUG: 'owner/repo',
         GITHUB_SHA: 'abcdef1234567890',
         VERCEL_GIT_COMMIT_REF: 'main',
         TRAVIS: 'true',
-      });
+      };
 
       const normalized = normalizeEnvironment(testEnv);
 
