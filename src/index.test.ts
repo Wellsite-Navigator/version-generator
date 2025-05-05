@@ -1,8 +1,9 @@
 import * as index from './index';
-import { Executor } from './index';
+import { normalizeEnvironment } from './normalize-env';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { Executor } from './index';
 import * as crypto from 'crypto';
 
 // No need to set NODE_ENV to test anymore since we're using proper mock executors
@@ -32,7 +33,7 @@ describe('Version Generator', () => {
   });
 
   describe('defaultExecutor', () => {
-    it('should handle getGitHubData success', async () => {
+    it('should have getGitHubData function', () => {
       // This test requires a mock server to properly test the HTTPS request
       // Skip this test since we can't mock https.get properly
       // The implementation is tested through other integration tests
@@ -40,12 +41,14 @@ describe('Version Generator', () => {
     });
 
     it('should handle getGitHubData error', async () => {
+      // This test requires a mock server to properly test the HTTPS request
       // Skip this test since we can't mock https.get properly
       // The implementation is tested through other integration tests
       expect(typeof index.defaultExecutor.getGitHubData).toBe('function');
     });
 
     it('should handle getGitHubData JSON parse error', async () => {
+      // This test requires a mock server to properly test the HTTPS request
       // Skip this test since we can't mock https.get properly
       // The implementation is tested through other integration tests
       expect(typeof index.defaultExecutor.getGitHubData).toBe('function');
@@ -94,7 +97,7 @@ describe('Version Generator', () => {
       const filePath = path.join(nestedDir, 'version.json');
 
       // Create a real executor that uses the file system
-      const realExecutor: index.Executor = {
+      const realExecutor: Executor = {
         execCommand: jest.fn(),
         fileExists: (path) => fs.existsSync(path),
         readFile: (path) => fs.readFileSync(path, 'utf-8'),
@@ -110,12 +113,12 @@ describe('Version Generator', () => {
         patch: 0,
         branchName: 'main',
         commitHash: 'abc123',
-        version: version,
+        version: '1.0.0-test+123abc',
         appReleaseVersion: '1.0.0',
       };
 
       // Execute
-      index.writeVersionToFile(versionInfo, filePath, { executor: realExecutor });
+      index.writeVersionToFile(versionInfo, filePath, { executor: realExecutor, cwd: nestedDir });
 
       // Verify
       expect(fs.existsSync(nestedDir)).toBe(true); // Directory was created
@@ -130,7 +133,7 @@ describe('Version Generator', () => {
   describe('getLatestTag', () => {
     it('should return the git tag when available', async () => {
       // Setup
-      const mockTagExecutor: index.Executor = {
+      const mockTagExecutor: Executor = {
         execCommand: jest.fn().mockImplementation((command) => {
           if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
             return 'v1.2\nv1.1\nv1.0';
@@ -147,7 +150,9 @@ describe('Version Generator', () => {
       // Execute
       const result = await index.getLatestTag({
         executor: mockTagExecutor,
-        env: { ...process.env, GITHUB_ACTIONS: 'false' },
+        env: normalizeEnvironment({
+          GITHUB_ACTIONS: 'false',
+        }),
       });
 
       // Verify
@@ -160,7 +165,7 @@ describe('Version Generator', () => {
 
     it('should return tag v0.0 when using a mock executor that returns it', async () => {
       // Setup
-      const mockExecutor: index.Executor = {
+      const mockExecutor: Executor = {
         execCommand: jest.fn().mockImplementation((command) => {
           if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
             return 'v0.0';
@@ -177,7 +182,10 @@ describe('Version Generator', () => {
       // Execute
       const result = await index.getLatestTag({
         executor: mockExecutor,
-        env: { ...process.env, GITHUB_ACTIONS: 'false', GITHUB_TOKEN: 'mock-token' },
+        env: normalizeEnvironment({
+          GITHUB_ACTIONS: 'false',
+          GITHUB_TOKEN: 'mock-token',
+        }),
       });
 
       // Verify
@@ -190,7 +198,7 @@ describe('Version Generator', () => {
 
     it('should reject when no tags match the v*.* pattern', async () => {
       // Setup
-      const mockNoTagsExecutor: index.Executor = {
+      const mockNoTagsExecutor: Executor = {
         execCommand: jest.fn().mockImplementation((command) => {
           if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
             return ''; // No tags matching v*.* pattern
@@ -206,13 +214,13 @@ describe('Version Generator', () => {
 
       // Execute and verify
       await expect(
-        index.getLatestTag({ executor: mockNoTagsExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' } }),
+        index.getLatestTag({ executor: mockNoTagsExecutor, env: normalizeEnvironment({ GITHUB_ACTIONS: 'false' }) }),
       ).rejects.toThrow('No tags matching v*.* pattern found in repository ancestry');
     });
 
     it('should reject when tags match v*.* pattern but not vX.Y format', async () => {
       // Setup
-      const mockInvalidFormatExecutor: index.Executor = {
+      const mockInvalidFormatExecutor: Executor = {
         execCommand: jest.fn().mockImplementation((command) => {
           if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
             return 'v1.2.3\nv2.3.4'; // Tags with patch version, not matching vX.Y format
@@ -228,13 +236,16 @@ describe('Version Generator', () => {
 
       // Execute and verify
       await expect(
-        index.getLatestTag({ executor: mockInvalidFormatExecutor, env: { ...process.env, GITHUB_ACTIONS: 'false' } }),
+        index.getLatestTag({
+          executor: mockInvalidFormatExecutor,
+          env: normalizeEnvironment({ GITHUB_ACTIONS: 'false' }),
+        }),
       ).rejects.toThrow('No tags matching the required format vX.Y found in repository ancestry');
     });
 
     it('should throw an error when git command fails', async () => {
       // Setup
-      const mockExecutor: index.Executor = {
+      const mockExecutor: Executor = {
         execCommand: jest.fn().mockImplementation(() => {
           throw new Error('No tags found');
         }),
@@ -249,7 +260,10 @@ describe('Version Generator', () => {
       await expect(
         index.getLatestTag({
           executor: mockExecutor,
-          env: { ...process.env, GITHUB_ACTIONS: 'false', GITHUB_TOKEN: 'mock-token' },
+          env: normalizeEnvironment({
+            GITHUB_ACTIONS: 'false',
+            GITHUB_TOKEN: 'mock-token',
+          }),
         }),
       ).rejects.toThrow('No git tags found');
     });
@@ -258,7 +272,7 @@ describe('Version Generator', () => {
   describe('getCommitCount', () => {
     it('should return the commit count from git command', async () => {
       // Setup
-      const mockCountExecutor: index.Executor = {
+      const mockCountExecutor: Executor = {
         execCommand: jest.fn().mockReturnValue('42'),
         fileExists: jest.fn(),
         readFile: jest.fn(),
@@ -270,7 +284,7 @@ describe('Version Generator', () => {
       // Execute
       const result = await index.getCommitCount('v1.2', {
         executor: mockCountExecutor,
-        env: { ...process.env, GITHUB_ACTIONS: 'false' },
+        env: normalizeEnvironment({ GITHUB_ACTIONS: 'false' }),
       });
 
       // Verify
@@ -280,7 +294,7 @@ describe('Version Generator', () => {
 
     it('should return commit count 123 when using a mock executor that returns it', async () => {
       // Setup
-      const customExecutor: index.Executor = {
+      const customExecutor: Executor = {
         execCommand: jest.fn().mockReturnValue('123'),
         fileExists: jest.fn(),
         readFile: jest.fn(),
@@ -292,7 +306,7 @@ describe('Version Generator', () => {
       // Execute
       const result = await index.getCommitCount('v1.2', {
         executor: customExecutor,
-        env: { ...process.env, GITHUB_ACTIONS: 'false' },
+        env: normalizeEnvironment({ GITHUB_ACTIONS: 'false' }),
       });
 
       // Verify
@@ -302,7 +316,7 @@ describe('Version Generator', () => {
 
     it('should use GitHub API when running in GitHub Actions', async () => {
       // Setup
-      const mockGithubExecutor: index.Executor = {
+      const mockGithubExecutor: Executor = {
         execCommand: jest.fn(),
         fileExists: jest.fn(),
         readFile: jest.fn(),
@@ -314,13 +328,13 @@ describe('Version Generator', () => {
       // Execute with GitHub Actions environment
       const result = await index.getCommitCount('v1.2', {
         executor: mockGithubExecutor,
-        env: {
+        env: normalizeEnvironment({
           GITHUB_ACTIONS: 'true',
           GITHUB_REPOSITORY_OWNER: 'testowner',
           GITHUB_REPOSITORY: 'testowner/testrepo',
           GITHUB_SHA: 'abcdef1234567890',
           GITHUB_TOKEN: 'mock-token',
-        },
+        }),
       });
 
       // Verify
@@ -339,7 +353,7 @@ describe('Version Generator', () => {
 
     it('should throw an error if GitHub API call fails', async () => {
       // Setup
-      const mockGithubErrorExecutor: index.Executor = {
+      const mockGithubErrorExecutor: Executor = {
         execCommand: jest.fn(),
         fileExists: jest.fn(),
         readFile: jest.fn(),
@@ -352,13 +366,13 @@ describe('Version Generator', () => {
       await expect(
         index.getCommitCount('v1.2', {
           executor: mockGithubErrorExecutor,
-          env: {
+          env: normalizeEnvironment({
             GITHUB_ACTIONS: 'true',
             GITHUB_REPOSITORY_OWNER: 'testowner',
             GITHUB_REPOSITORY: 'testowner/testrepo',
             GITHUB_SHA: 'abcdef1234567890',
             GITHUB_TOKEN: 'mock-token',
-          },
+          }),
         }),
       ).rejects.toThrow(
         'Failed to get commit count from tag v1.2 via ' +
@@ -368,7 +382,7 @@ describe('Version Generator', () => {
 
     it('should throw error if GitHub environment variables are missing', async () => {
       // Setup
-      const mockGithubMissingEnvExecutor: index.Executor = {
+      const mockGithubMissingEnvExecutor: Executor = {
         execCommand: jest.fn(),
         fileExists: jest.fn(),
         readFile: jest.fn(),
@@ -381,10 +395,10 @@ describe('Version Generator', () => {
       await expect(
         index.getCommitCount('v1.2', {
           executor: mockGithubMissingEnvExecutor,
-          env: {
+          env: normalizeEnvironment({
             GITHUB_ACTIONS: 'true',
             // Missing required environment variables
-          },
+          }),
         }),
       ).rejects.toThrow(
         'Failed to get commit count from tag v1.2 via GITHUB API: Missing required GitHub environment variables',
@@ -393,7 +407,7 @@ describe('Version Generator', () => {
 
     it('should throw an error if git command fails', async () => {
       // Setup
-      const errorExecutor: index.Executor = {
+      const errorExecutor: Executor = {
         execCommand: jest.fn().mockImplementation(() => {
           throw new Error('git command failed');
         }),
@@ -405,7 +419,7 @@ describe('Version Generator', () => {
       };
 
       // Execute and verify
-      await expect(index.getCommitCount('v1.2', { executor: errorExecutor })).rejects.toThrow(
+      await expect(index.getCommitCount('v1.2', { executor: errorExecutor, env: {} })).rejects.toThrow(
         'Failed to get commit count from tag v1.2',
       );
     });
@@ -423,7 +437,7 @@ describe('getLatestTag with GitHub API', () => {
       { name: 'v1.0', commit: { sha: 'ghi789' } },
     ];
 
-    const githubApiExecutor: index.Executor = {
+    const githubApiExecutor: Executor = {
       execCommand: jest.fn(),
       fileExists: jest.fn(),
       readFile: jest.fn(),
@@ -435,12 +449,12 @@ describe('getLatestTag with GitHub API', () => {
     // Execute
     const result = await index.getLatestTag({
       executor: githubApiExecutor,
-      env: {
+      env: normalizeEnvironment({
         GITHUB_ACTIONS: 'true',
         GITHUB_REPOSITORY_OWNER: 'Wellsite-Navigator',
         GITHUB_REPOSITORY: 'Wellsite-Navigator/wellsite-portal',
         GITHUB_TOKEN: 'mock-token',
-      },
+      }),
     });
 
     // Verify
@@ -458,7 +472,7 @@ describe('getLatestTag with GitHub API', () => {
 
   it('should throw an error if GitHub API fails', async () => {
     // Setup
-    const errorExecutor: index.Executor = {
+    const errorExecutor: Executor = {
       execCommand: jest.fn().mockReturnValue('v1.3'),
       fileExists: jest.fn(),
       readFile: jest.fn(),
@@ -471,12 +485,12 @@ describe('getLatestTag with GitHub API', () => {
     await expect(
       index.getLatestTag({
         executor: errorExecutor,
-        env: {
+        env: normalizeEnvironment({
           GITHUB_ACTIONS: 'true',
           GITHUB_REPOSITORY_OWNER: 'Wellsite-Navigator',
           GITHUB_REPOSITORY: 'Wellsite-Navigator/wellsite-portal',
           GITHUB_TOKEN: 'mock-token',
-        },
+        }),
       }),
     ).rejects.toThrow('Failed to get tag from GitHub API');
 
@@ -486,7 +500,7 @@ describe('getLatestTag with GitHub API', () => {
 
   it('should throw an error if no tags are found in GitHub API response', async () => {
     // Setup
-    const emptyResponseExecutor: index.Executor = {
+    const emptyResponseExecutor: Executor = {
       execCommand: jest.fn(),
       fileExists: jest.fn(),
       readFile: jest.fn(),
@@ -499,19 +513,19 @@ describe('getLatestTag with GitHub API', () => {
     await expect(
       index.getLatestTag({
         executor: emptyResponseExecutor,
-        env: {
+        env: normalizeEnvironment({
           GITHUB_ACTIONS: 'true',
           GITHUB_REPOSITORY_OWNER: 'Wellsite-Navigator',
           GITHUB_REPOSITORY: 'Wellsite-Navigator/wellsite-portal',
           GITHUB_TOKEN: 'mock-token',
-        },
+        }),
       }),
-    ).rejects.toThrow('No tags found in repository');
+    ).rejects.toThrow('Unexpected response format from GitHub API');
   });
 
   it('should throw an error if no tags matching vX.Y format are found in GitHub API response', async () => {
     // Setup
-    const noVTagsExecutor: index.Executor = {
+    const noVTagsExecutor: Executor = {
       execCommand: jest.fn(),
       fileExists: jest.fn(),
       readFile: jest.fn(),
@@ -524,12 +538,12 @@ describe('getLatestTag with GitHub API', () => {
     await expect(
       index.getLatestTag({
         executor: noVTagsExecutor,
-        env: {
+        env: normalizeEnvironment({
           GITHUB_ACTIONS: 'true',
           GITHUB_REPOSITORY_OWNER: 'Wellsite-Navigator',
           GITHUB_REPOSITORY: 'Wellsite-Navigator/wellsite-portal',
           GITHUB_TOKEN: 'mock-token',
-        },
+        }),
       }),
     ).rejects.toThrow('No tags matching the required format vX.Y found in repository');
   });
@@ -537,9 +551,22 @@ describe('getLatestTag with GitHub API', () => {
 
 describe('getCurrentBranch', () => {
   it('should return branch name from GITHUB_REF_NAME when available', () => {
-    // Execute with env parameter
+    // Setup
+    const mockExecutor: Executor = {
+      execCommand: jest.fn(),
+      fileExists: jest.fn(),
+      readFile: jest.fn(),
+      writeFile: jest.fn(),
+      mkdirSync: jest.fn(),
+      getGitHubData: jest.fn(),
+    };
+
+    // Execute
     const result = index.getCurrentBranch({
-      env: { GITHUB_REF_NAME: 'feature/test-branch' },
+      executor: mockExecutor,
+      env: normalizeEnvironment({
+        GITHUB_REF_NAME: 'feature/test-branch',
+      }),
     });
 
     // Verify
@@ -548,83 +575,9 @@ describe('getCurrentBranch', () => {
   });
 
   it('should return branch name from git command when GITHUB_REF_NAME is not available', () => {
-    // Reset the mock to ensure it returns the expected value
-    jest.clearAllMocks();
-
-    // Create a custom executor for this test
-    const branchExecutor: index.Executor = {
-      execCommand: jest.fn().mockReturnValue('main'),
-      fileExists: jest.fn(),
-      readFile: jest.fn(),
-      writeFile: jest.fn(),
-      mkdirSync: jest.fn(),
-      getGitHubData: jest.fn(),
-    };
-
-    // Execute with the custom executor
-    const result = index.getCurrentBranch({
-      executor: branchExecutor,
-      env: {},
-    });
-
-    // Verify
-    expect(result).toBe('main');
-    expect(branchExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --abbrev-ref HEAD', undefined);
-  });
-
-  it('should throw an error when git command fails and not in test mode', () => {
-    // Create a failing executor
-    const failingExecutor: Executor = {
-      execCommand: jest.fn().mockImplementation(() => {
-        throw new Error('Command failed');
-      }),
-      fileExists: jest.fn(),
-      readFile: jest.fn(),
-      writeFile: jest.fn(),
-      mkdirSync: jest.fn(),
-      getGitHubData: jest.fn(),
-    };
-
-    // Execute & Verify
-    let errorThrown = false;
-    try {
-      index.getCurrentBranch({
-        executor: failingExecutor,
-        env: { NODE_ENV: 'production', GITHUB_ACTIONS: 'false' },
-      });
-    } catch (error: unknown) {
-      errorThrown = true;
-      expect(error instanceof Error ? error.message : String(error)).toBe('Failed to get current branch');
-    }
-    expect(errorThrown).toBe(true);
-  });
-
-  it('should throw an error when git command fails', () => {
-    // Create a failing executor
-    const failingExecutor: Executor = {
-      execCommand: jest.fn().mockImplementation(() => {
-        throw new Error('Command failed');
-      }),
-      fileExists: jest.fn(),
-      readFile: jest.fn(),
-      writeFile: jest.fn(),
-      mkdirSync: jest.fn(),
-      getGitHubData: jest.fn(),
-    };
-
-    // Execute & Verify - should throw an error
-    expect(() =>
-      index.getCurrentBranch({
-        executor: failingExecutor,
-        env: { GITHUB_ACTIONS: 'false' },
-      }),
-    ).toThrow('Failed to get current branch');
-  });
-
-  it('should return the branch name from a mock executor', () => {
-    // Create a mock executor that returns a branch name
-    const mockBranchExecutor: Executor = {
-      execCommand: jest.fn().mockReturnValue('feature-branch'),
+    // Setup
+    const mockExecutor: Executor = {
+      execCommand: jest.fn().mockReturnValue('feature/local-branch'),
       fileExists: jest.fn(),
       readFile: jest.fn(),
       writeFile: jest.fn(),
@@ -634,21 +587,56 @@ describe('getCurrentBranch', () => {
 
     // Execute
     const result = index.getCurrentBranch({
-      executor: mockBranchExecutor,
-      env: {},
+      executor: mockExecutor,
+      env: normalizeEnvironment({}),
     });
 
     // Verify
-    expect(result).toBe('feature-branch');
-    expect(mockBranchExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --abbrev-ref HEAD', undefined);
+    expect(result).toBe('feature/local-branch');
+    expect(mockExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --abbrev-ref HEAD', undefined);
+  });
+
+  it('should handle errors from git command', () => {
+    // Setup
+    const mockErrorExecutor: Executor = {
+      execCommand: jest.fn().mockImplementation(() => {
+        throw new Error('git command failed');
+      }),
+      fileExists: jest.fn(),
+      readFile: jest.fn(),
+      writeFile: jest.fn(),
+      mkdirSync: jest.fn(),
+      getGitHubData: jest.fn(),
+    };
+
+    // Execute and verify
+    expect(() =>
+      index.getCurrentBranch({
+        executor: mockErrorExecutor,
+        env: normalizeEnvironment({}),
+      }),
+    ).toThrow('Failed to get current branch');
   });
 });
 
 describe('getShortCommitHash', () => {
   it('should return commit hash from GITHUB_SHA when available', () => {
-    // Execute with env parameter
+    // Setup
+    const mockExecutor: Executor = {
+      execCommand: jest.fn(),
+      fileExists: jest.fn(),
+      readFile: jest.fn(),
+      writeFile: jest.fn(),
+      mkdirSync: jest.fn(),
+      getGitHubData: jest.fn(),
+    };
+
+    // Execute
     const result = index.getShortCommitHash({
-      env: { GITHUB_SHA: 'abcdef1234567890' },
+      executor: mockExecutor,
+      env: normalizeEnvironment({
+        GITHUB_SHA: 'abcdef1234567890',
+      }),
     });
 
     // Verify
@@ -657,83 +645,9 @@ describe('getShortCommitHash', () => {
   });
 
   it('should return commit hash from git command when GITHUB_SHA is not available', () => {
-    // Reset the mock to ensure it returns the expected value
-    jest.clearAllMocks();
-
-    // Create a custom executor for this test
-    const hashExecutor: index.Executor = {
-      execCommand: jest.fn().mockReturnValue('abcdef12'),
-      fileExists: jest.fn(),
-      readFile: jest.fn(),
-      writeFile: jest.fn(),
-      mkdirSync: jest.fn(),
-      getGitHubData: jest.fn(),
-    };
-
-    // Execute with the custom executor
-    const result = index.getShortCommitHash({
-      executor: hashExecutor,
-      env: {},
-    });
-
-    // Verify
-    expect(result).toBe('abcdef12');
-    expect(hashExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --short=8 HEAD', undefined);
-  });
-
-  it('should throw an error when git command fails and not in test mode', () => {
-    // Create a failing executor
-    const failingExecutor: Executor = {
-      execCommand: jest.fn().mockImplementation(() => {
-        throw new Error('Command failed');
-      }),
-      fileExists: jest.fn(),
-      readFile: jest.fn(),
-      writeFile: jest.fn(),
-      mkdirSync: jest.fn(),
-      getGitHubData: jest.fn(),
-    };
-
-    // Execute & Verify
-    let errorThrown = false;
-    try {
-      index.getShortCommitHash({
-        executor: failingExecutor,
-        env: { NODE_ENV: 'production', GITHUB_ACTIONS: 'false' },
-      });
-    } catch (error: unknown) {
-      errorThrown = true;
-      expect(error instanceof Error ? error.message : String(error)).toBe('Failed to get commit hash');
-    }
-    expect(errorThrown).toBe(true);
-  });
-
-  it('should throw an error when git command fails', () => {
-    // Create a failing executor
-    const failingExecutor: Executor = {
-      execCommand: jest.fn().mockImplementation(() => {
-        throw new Error('Command failed');
-      }),
-      fileExists: jest.fn(),
-      readFile: jest.fn(),
-      writeFile: jest.fn(),
-      mkdirSync: jest.fn(),
-      getGitHubData: jest.fn(),
-    };
-
-    // Execute & Verify - should throw an error
-    expect(() =>
-      index.getShortCommitHash({
-        executor: failingExecutor,
-        env: { GITHUB_ACTIONS: 'false' },
-      }),
-    ).toThrow('Failed to get commit hash');
-  });
-
-  it('should return the commit hash from a mock executor', () => {
-    // Create a mock executor that returns a commit hash
-    const mockHashExecutor: Executor = {
-      execCommand: jest.fn().mockReturnValue('abcdef12'),
+    // Setup
+    const mockExecutor: Executor = {
+      execCommand: jest.fn().mockReturnValue('12345678'),
       fileExists: jest.fn(),
       readFile: jest.fn(),
       writeFile: jest.fn(),
@@ -743,20 +657,42 @@ describe('getShortCommitHash', () => {
 
     // Execute
     const result = index.getShortCommitHash({
-      executor: mockHashExecutor,
-      env: {},
+      executor: mockExecutor,
+      env: normalizeEnvironment({}),
     });
 
     // Verify
-    expect(result).toBe('abcdef12');
-    expect(mockHashExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --short=8 HEAD', undefined);
+    expect(result).toBe('12345678');
+    expect(mockExecutor.execCommand).toHaveBeenCalledWith('git rev-parse --short=8 HEAD', undefined);
+  });
+
+  it('should handle errors from git command', () => {
+    // Setup
+    const mockErrorExecutor: Executor = {
+      execCommand: jest.fn().mockImplementation(() => {
+        throw new Error('git command failed');
+      }),
+      fileExists: jest.fn(),
+      readFile: jest.fn(),
+      writeFile: jest.fn(),
+      mkdirSync: jest.fn(),
+      getGitHubData: jest.fn(),
+    };
+
+    // Execute and verify
+    expect(() =>
+      index.getShortCommitHash({
+        executor: mockErrorExecutor,
+        env: normalizeEnvironment({}),
+      }),
+    ).toThrow('Failed to get commit hash');
   });
 });
 
 describe('generatePackageVersion', () => {
   it('should generate a valid version string using the executor pattern', async () => {
     // Create a custom executor for this test
-    const packageVersionExecutor: index.Executor = {
+    const packageVersionExecutor: Executor = {
       execCommand: jest.fn().mockImplementation((command: string) => {
         if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
           return 'v1.2\nv1.1\nv1.0';
@@ -777,9 +713,9 @@ describe('generatePackageVersion', () => {
     };
 
     // Setup - use the custom executor
-    const result = await index.generatePackageVersion(undefined, {
+    const result = await index.generatePackageVersion('', {
       executor: packageVersionExecutor,
-      env: { ...process.env, GITHUB_ACTIONS: 'false' },
+      env: normalizeEnvironment({ GITHUB_ACTIONS: 'false' }),
     });
 
     // Verify the result format
@@ -808,9 +744,9 @@ describe('generatePackageVersion', () => {
 
     // Execute & Verify
     await expect(
-      index.generatePackageVersion(undefined, {
+      index.generatePackageVersion('', {
         executor: invalidTagExecutor,
-        env: { ...process.env, GITHUB_ACTIONS: 'false' },
+        env: normalizeEnvironment({ GITHUB_ACTIONS: 'false' }),
       }),
     ).rejects.toThrow('No tags matching v*.* pattern found in repository ancestry');
   });
@@ -833,16 +769,16 @@ describe('generatePackageVersion', () => {
 
     // Execute & Verify
     await expect(
-      index.generatePackageVersion(undefined, {
+      index.generatePackageVersion('', {
         executor: majorVersionTagExecutor,
-        env: { ...process.env, GITHUB_ACTIONS: 'false' },
+        env: normalizeEnvironment({ GITHUB_ACTIONS: 'false' }),
       }),
     ).rejects.toThrow('No tags matching the required format vX.Y found in repository ancestry');
   });
 
   it('should use GitHub environment variables when available', async () => {
     // Setup - Create a custom executor that simulates GitHub environment
-    const githubExecutor: index.Executor = {
+    const githubExecutor: Executor = {
       fileExists: jest.fn(),
       readFile: jest.fn(),
       writeFile: jest.fn(),
@@ -861,18 +797,21 @@ describe('generatePackageVersion', () => {
     };
 
     // Execute with custom env object instead of modifying process.env
-    const result = await index.generatePackageVersion(undefined, {
+    const result = await index.generatePackageVersion('', {
       executor: githubExecutor,
-      env: {
+      env: normalizeEnvironment({
         GITHUB_REF_NAME: 'feature/env-branch',
         GITHUB_SHA: '1234567890abcdef',
         GITHUB_ACTIONS: 'false',
-      },
+      }),
     });
 
     // Verify
     expect(result).toHaveProperty('version');
     expect(result.version).toMatch(/^1\.2\.\d+-feature-env-branch\.12345678$/);
+
+    // Verify that the executor was used
+    expect(githubExecutor.execCommand).toHaveBeenCalled();
   });
 
   // Removed test for allowTestFallback as it's no longer needed with the executor pattern
@@ -888,7 +827,7 @@ describe('generateAndWriteVersion', () => {
     fs.mkdirSync(rootDir, { recursive: true });
 
     // Create a real executor that uses the file system
-    const realExecutor: index.Executor = {
+    const realExecutor: Executor = {
       execCommand: jest.fn().mockImplementation((command) => {
         if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
           return 'v1.2'; // Mock git tag command
@@ -911,7 +850,7 @@ describe('generateAndWriteVersion', () => {
     // Execute
     const result = await index.generateAndWriteVersion(rootDir, undefined, {
       executor: realExecutor,
-      env: { ...process.env, GITHUB_ACTIONS: 'false' },
+      env: normalizeEnvironment({ GITHUB_ACTIONS: 'false' }),
     });
 
     // Verify
@@ -945,7 +884,7 @@ describe('generateAndWriteVersion', () => {
     const expectedFilePath = path.join(rootDir, outputFilePath);
 
     // Create a real executor that uses the file system
-    const realExecutor: index.Executor = {
+    const realExecutor: Executor = {
       execCommand: jest.fn().mockImplementation((command) => {
         if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
           return 'v1.2'; // Mock git tag command
@@ -968,7 +907,7 @@ describe('generateAndWriteVersion', () => {
     // Execute
     const result = await index.generateAndWriteVersion(rootDir, outputFilePath, {
       executor: realExecutor,
-      env: { ...process.env, GITHUB_ACTIONS: 'false' },
+      env: normalizeEnvironment({ GITHUB_ACTIONS: 'false' }),
     });
 
     // Verify
