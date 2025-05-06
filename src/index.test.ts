@@ -346,7 +346,7 @@ describe('Version Generator', () => {
           REPOSITORY_NAME: 'testrepo',
           SHA: 'abcdef1234567890',
           TOKEN: 'mock-token',
-          CI: 'true',
+          CI_ENV: 'true',
         }),
       );
     });
@@ -465,7 +465,7 @@ describe('getLatestTag with GitHub API', () => {
         REPOSITORY_OWNER: 'Wellsite-Navigator',
         REPOSITORY_NAME: 'wellsite-portal',
         TOKEN: 'mock-token',
-        CI: 'true',
+        CI_ENV: 'true',
       }),
     );
   });

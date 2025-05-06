@@ -40,14 +40,14 @@ export const defaultExecutor: Executor = {
   mkdirSync: (dirPath: string, options?: { recursive: boolean }) => mkdirSync(dirPath, options),
   getGitHubData: async (url: string, env: EnvVars) => {
     // Fail if TOKEN is missing when running in CI
-    if (!env.TOKEN && env.CI === 'true') {
+    if (!env.TOKEN && env.CI_ENV === 'true') {
       throw new Error(
         'TOKEN environment variable is not set. This is required for GitHub API access when running in CI.',
       );
     }
 
     // Warn if TOKEN is missing but not in CI
-    if (!env.TOKEN && env.CI !== 'true') {
+    if (!env.TOKEN && env.CI_ENV !== 'true') {
       console.warn('Warning: TOKEN environment variable is not set. GitHub API requests may be rate-limited.');
     }
 
@@ -200,7 +200,7 @@ export async function getLatestTag({
   const resolvedExecutor = executor || defaultExecutor;
 
   // If running in CI, use the GitHub API
-  if (env.CI === 'true') {
+  if (env.CI_ENV === 'true') {
     try {
       return await getLatestTagFromGitHub(resolvedExecutor, env);
     } catch (error) {
@@ -259,7 +259,7 @@ export async function getCommitCount(
   const env = options.env;
 
   // No special case needed as we're failing when no tags are found
-  if (env.CI === 'true') {
+  if (env.CI_ENV === 'true') {
     try {
       return await getCommitCountFromGitHub(fromTag, executor, env);
     } catch (error: unknown) {
