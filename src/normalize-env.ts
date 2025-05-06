@@ -10,7 +10,7 @@ export type EnvVars = {
   REPOSITORY_NAME?: string; // Just the repo name without owner
   SHA?: string;
   BRANCH_NAME?: string; // Single field for branch name (PR source branch or regular branch)
-  CI?: string;
+  CI_ENV?: string;
 
   // Source tracking for each normalized variable
   TOKEN_SOURCE?: string;
@@ -18,7 +18,7 @@ export type EnvVars = {
   REPOSITORY_NAME_SOURCE?: string;
   SHA_SOURCE?: string;
   BRANCH_NAME_SOURCE?: string;
-  CI_SOURCE?: string;
+  CI_ENV_SOURCE?: string;
 
   // Allow any other environment variables that might be passed through
   [key: string]: string | undefined;
@@ -127,9 +127,9 @@ export function normalizeEnvironment(env: Record<string, string | undefined>): E
     // Add other CI branch variables
   ]);
 
-  // CI (detect if running in CI)
+  // CI_ENV (detect if running in CI)
   normalizeVar(
-    'CI',
+    'CI_ENV',
     [
       ['GITHUB_ACTIONS', 'GITHUB'],
       ['VERCEL', 'VERCEL'],

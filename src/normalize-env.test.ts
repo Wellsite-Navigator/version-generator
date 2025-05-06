@@ -20,7 +20,7 @@ describe('normalizeEnvironment', () => {
       expect(normalized.REPOSITORY_NAME).toBe('repo');
       expect(normalized.SHA).toBe('abcdef1234567890');
       expect(normalized.BRANCH_NAME).toBe('main');
-      expect(normalized.CI).toBe('true');
+      expect(normalized.CI_ENV).toBe('true');
 
       // Check source tracking
       expect(normalized.TOKEN_SOURCE).toBe('GITHUB');
@@ -28,7 +28,7 @@ describe('normalizeEnvironment', () => {
       expect(normalized.REPOSITORY_NAME_SOURCE).toBe('GITHUB');
       expect(normalized.SHA_SOURCE).toBe('GITHUB');
       expect(normalized.BRANCH_NAME_SOURCE).toBe('GITHUB');
-      expect(normalized.CI_SOURCE).toBe('GITHUB');
+      expect(normalized.CI_ENV_SOURCE).toBe('GITHUB');
     });
 
     it('should handle GitHub pull request environment variables', () => {
@@ -69,7 +69,7 @@ describe('normalizeEnvironment', () => {
       expect(normalized.REPOSITORY_NAME).toBe('repo');
       expect(normalized.SHA).toBe('abcdef1234567890');
       expect(normalized.BRANCH_NAME).toBe('main');
-      expect(normalized.CI).toBe('true');
+      expect(normalized.CI_ENV).toBe('true');
 
       // Check source tracking
       expect(normalized.TOKEN_SOURCE).toBe('GITHUB');
@@ -77,7 +77,7 @@ describe('normalizeEnvironment', () => {
       expect(normalized.REPOSITORY_NAME_SOURCE).toBe('VERCEL');
       expect(normalized.SHA_SOURCE).toBe('VERCEL');
       expect(normalized.BRANCH_NAME_SOURCE).toBe('VERCEL');
-      expect(normalized.CI_SOURCE).toBe('VERCEL');
+      expect(normalized.CI_ENV_SOURCE).toBe('VERCEL');
     });
   });
 
@@ -99,7 +99,7 @@ describe('normalizeEnvironment', () => {
       expect(normalized.REPOSITORY_NAME).toBe('repo');
       expect(normalized.SHA).toBe('abcdef1234567890');
       expect(normalized.BRANCH_NAME).toBe('main');
-      expect(normalized.CI).toBe('true');
+      expect(normalized.CI_ENV).toBe('true');
 
       // Check source tracking
       expect(normalized.TOKEN_SOURCE).toBe('TRAVIS');
@@ -107,7 +107,7 @@ describe('normalizeEnvironment', () => {
       expect(normalized.REPOSITORY_NAME_SOURCE).toBe('TRAVIS');
       expect(normalized.SHA_SOURCE).toBe('TRAVIS');
       expect(normalized.BRANCH_NAME_SOURCE).toBe('TRAVIS');
-      expect(normalized.CI_SOURCE).toBe('TRAVIS');
+      expect(normalized.CI_ENV_SOURCE).toBe('TRAVIS');
     });
 
     it('should handle Travis CI pull request', () => {
@@ -132,12 +132,12 @@ describe('normalizeEnvironment', () => {
   describe('Generic CI environment variables', () => {
     it('should handle generic CI environment', () => {
       const testEnv = {
-        CI: 'true',
+        CI_ENV: 'true',
       };
 
       const normalized = normalizeEnvironment(testEnv);
-      expect(normalized.CI).toBe('true');
-      expect(normalized.CI_SOURCE).toBe('ENV');
+      expect(normalized.CI_ENV).toBe('true');
+      expect(normalized.CI_ENV_SOURCE).toBe('ENV');
     });
   });
 
@@ -151,7 +151,7 @@ describe('normalizeEnvironment', () => {
       expect(normalized.REPOSITORY_NAME).toBeUndefined();
       expect(normalized.SHA).toBeUndefined();
       expect(normalized.BRANCH_NAME).toBeUndefined();
-      expect(normalized.CI).toBeUndefined();
+      expect(normalized.CI_ENV).toBeUndefined();
     });
   });
 
@@ -184,8 +184,8 @@ describe('normalizeEnvironment', () => {
       expect(normalized.BRANCH_NAME).toBe('main');
       expect(normalized.BRANCH_NAME_SOURCE).toBe('VERCEL');
 
-      expect(normalized.CI).toBe('true');
-      expect(normalized.CI_SOURCE).toBe('TRAVIS');
+      expect(normalized.CI_ENV).toBe('true');
+      expect(normalized.CI_ENV_SOURCE).toBe('TRAVIS');
     });
   });
 });
