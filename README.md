@@ -165,7 +165,7 @@ pnpm dlx @wellsite/version-generator --help
 #### CLI Options
 
 - `--dir, -d`: Directory to use for command execution and output file path (defaults to current working directory)
-- `--output-file`: Output file path (relative to --dir if not absolute) where the version file should be written (optional)
+- `--output-file`: Output file path (relative to --dir if not absolute) where the version file should be written. Can be specified multiple times to write to multiple locations.
 - `--format, -f`: Output format: `string` or `json` (default: `string`)
 - `--android`: Enable Android version code generation
 - `--android-package`: Android package name for the Play Store API
@@ -180,6 +180,23 @@ pnpm dlx @wellsite/version-generator --help
 
 > **Local Usage**: The tool uses local Git commands and does not require a `GITHUB_TOKEN`.  
 > **GitHub Actions**: When running in a GitHub Actions environment (`GITHUB_ACTIONS=true`), the tool uses the GitHub API and requires `GITHUB_TOKEN`.
+
+#### Examples
+
+Basic usage to output version to console:
+```bash
+npx @wellsite/version-generator
+```
+
+Write version to a file:
+```bash
+npx @wellsite/version-generator --output-file version.json --format json
+```
+
+Write version to multiple files:
+```bash
+npx @wellsite/version-generator --output-file version.json --output-file public/version.json --format json
+```
 
 #### JSON Output Format
 

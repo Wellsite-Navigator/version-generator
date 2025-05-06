@@ -8,7 +8,7 @@ import { DEFAULT_MAJOR_VERSION_INCREMENT } from './android-version';
 /**
  * Run the version generator with the given options
  * @param dir - Directory to use for command execution and output file path
- * @param outputFilePath - Optional output file path (relative to dir if not absolute)
+ * @param outputFilePath - Optional output file path(s) (relative to dir if not absolute)
  * @param format - Output format (string or json)
  * @param androidOptions - Optional Android version code generation options
  * @param iosOptions - Optional ios version code generation options
@@ -16,7 +16,7 @@ import { DEFAULT_MAJOR_VERSION_INCREMENT } from './android-version';
  */
 export async function runVersionGenerator(
   dir?: string,
-  outputFilePath?: string,
+  outputFilePath?: string | string[],
   format: string = 'string',
   androidOptions?: {
     enabled?: boolean;
@@ -68,7 +68,7 @@ export async function runVersionGenerator(
   });
 
   // Output based on format and outputFilePath
-  if (!outputFilePath) {
+  if (!outputFilePath || (Array.isArray(outputFilePath) && outputFilePath.length === 0)) {
     // No output file specified - output to console based on format
     if (normalizedFormat === 'string') {
       console.log(versionInfo.version);
@@ -76,8 +76,10 @@ export async function runVersionGenerator(
       console.log(JSON.stringify(versionInfo, null, 2));
     }
   } else {
-    // Output file provided - output additional information
-    console.log(`Successfully generated version: ${versionInfo.version}`);
+    // Output file(s) provided - output additional information
+    const fileCount = Array.isArray(outputFilePath) ? outputFilePath.length : 1;
+    const fileWord = fileCount === 1 ? 'file' : 'files';
+    console.log(`Successfully generated version: ${versionInfo.version} (written to ${fileCount} ${fileWord})`);
   }
 
   return versionInfo;
@@ -96,7 +98,13 @@ if (require.main === module) {
     )
     .option(
       '--output-file <path>',
-      'Output file path (relative to --dir if not absolute) where the version file should be written',
+      'Output file path (relative to --dir if not absolute) where the version file should be written. Can be specified multiple times to write to multiple locations.',
+      (value, previous) => {
+        // If previous is undefined, initialize as empty array
+        // Otherwise, add the new value to the array
+        return previous === undefined ? [value] : [...previous, value];
+      },
+      [] as string[],
     )
     .option('-f, --format <format>', 'Output format (string or json)', 'string')
     .option('--android', 'Enable Android version code generation')

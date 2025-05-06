@@ -78,7 +78,31 @@ describe('CLI', () => {
       commitHash: 'abc123',
       version: '1.2.3-test-abc123',
     });
-    expect(mockConsoleLog).toHaveBeenCalledWith('Successfully generated version: 1.2.3-test-abc123');
+    expect(mockConsoleLog).toHaveBeenCalledWith(
+      'Successfully generated version: 1.2.3-test-abc123 (written to 1 file)',
+    );
+  });
+
+  it('should generate version and write to multiple output files when provided', async () => {
+    // Execute
+    const outputFiles = ['path/to/first/version.json', 'path/to/second/version.json'];
+    const result = await runVersionGenerator('/test/root', outputFiles);
+
+    // Verify
+    expect(index.generateAndWriteVersion).toHaveBeenCalledWith('/test/root', outputFiles, {
+      android: undefined,
+    });
+    expect(result).toEqual({
+      major: '1',
+      minor: '2',
+      patch: 3,
+      branchName: 'test',
+      commitHash: 'abc123',
+      version: '1.2.3-test-abc123',
+    });
+    expect(mockConsoleLog).toHaveBeenCalledWith(
+      'Successfully generated version: 1.2.3-test-abc123 (written to 2 files)',
+    );
   });
 
   it('should throw an error for invalid format', async () => {

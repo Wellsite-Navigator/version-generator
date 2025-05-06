@@ -492,18 +492,18 @@ export function writeVersionToFile(
 
 /**
  * Generate a version and write it to a file
- * @param dir - Directory to use for command execution and output file path
- * @param outputFilePath - Optional output file path (relative to dir if not absolute)
- * @param options - Optional configuration
- * @param options.executor - Custom executor for testing
- * @param options.env - Environment variables
+ * @param dir - Directory to use for command execution
+ * @param outputFilePath - Optional output file path(s) (relative to dir if not absolute)
+ * @param options - Options for version generation
+ * @param options.executor - Optional executor for commands
+ * @param options.env - Optional environment variables
  * @param options.android - Android version options
  * @param options.ios - iOS version options
  * @returns Promise resolving to the version information object
  */
-export async function generateAndWriteVersion( //CLI Entry Point
+export async function generateAndWriteVersion(
   dir: string,
-  outputFilePath?: string,
+  outputFilePath?: string | string[],
   options: { executor?: Executor; env?: EnvVars; android?: AndroidVersionOptions; ios?: IosVersionOptions } = {},
 ): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
@@ -521,9 +521,17 @@ export async function generateAndWriteVersion( //CLI Entry Point
     ios: options.ios,
   });
 
-  // If an output file path is provided, write the version to the file
+  // If output file path(s) are provided, write the version to the file(s)
   if (outputFilePath) {
-    writeVersionToFile(versionInfo, outputFilePath, { executor, cwd: dir });
+    if (Array.isArray(outputFilePath)) {
+      // Write to multiple output files
+      for (const filePath of outputFilePath) {
+        writeVersionToFile(versionInfo, filePath, { executor, cwd: dir });
+      }
+    } else {
+      // Write to a single output file
+      writeVersionToFile(versionInfo, outputFilePath, { executor, cwd: dir });
+    }
   }
 
   return versionInfo;

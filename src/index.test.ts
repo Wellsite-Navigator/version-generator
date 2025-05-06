@@ -950,5 +950,72 @@ describe('generateAndWriteVersion', () => {
     expect(true).toBe(true);
   });
 
+  it('should generate version and write to multiple files when outputFilePath is an array', async () => {
+    // Setup
+    // Create a unique temporary directory for this test
+    const rootDir = path.join(os.tmpdir(), `version-generator-test-${crypto.randomBytes(4).toString('hex')}`);
+    fs.mkdirSync(rootDir, { recursive: true });
+
+    // Define multiple output paths
+    const outputFilePaths = [
+      'nested/path1/version.json',
+      'nested/path2/version.json',
+      'version.json', // Test root level file too
+    ];
+
+    // Expected absolute paths
+    const expectedFilePaths = outputFilePaths.map((filePath) => path.join(rootDir, filePath));
+
+    // Create a real executor that uses the file system
+    const realExecutor: Executor = {
+      execCommand: jest.fn().mockImplementation((command) => {
+        if (command === 'git tag --list "v*.*" --sort=-creatordate --merged HEAD') {
+          return 'v1.2'; // Mock git tag command
+        } else if (command === 'git rev-parse --abbrev-ref HEAD') {
+          return 'main'; // Mock git branch command
+        } else if (command === 'git rev-parse --short=8 HEAD') {
+          return 'abcdef12'; // Mock git commit hash command
+        } else if (command.includes('git rev-list')) {
+          return '42'; // Mock git commit count command
+        }
+        throw new Error(`Unexpected command: ${command}`);
+      }),
+      fileExists: (path) => fs.existsSync(path),
+      readFile: (path) => fs.readFileSync(path, 'utf-8'),
+      writeFile: jest.fn().mockImplementation((path, content) => fs.writeFileSync(path, content)),
+      mkdirSync: (path, options) => fs.mkdirSync(path, options),
+      getGitHubData: jest.fn(),
+    };
+
+    // Execute
+    const result = await index.generateAndWriteVersion(rootDir, outputFilePaths, {
+      executor: realExecutor,
+      env: normalizeEnvironment({ GITHUB_ACTIONS: 'false' }),
+    });
+
+    // Verify
+    expect(result).toHaveProperty('version');
+    expect(result).toHaveProperty('major');
+    expect(result).toHaveProperty('minor');
+    expect(result).toHaveProperty('patch');
+    expect(result).toHaveProperty('branchName');
+    expect(result).toHaveProperty('commitHash');
+
+    // Check that all files were created
+    for (const filePath of expectedFilePaths) {
+      expect(fs.existsSync(filePath)).toBe(true);
+
+      // Read the file and verify its contents
+      const fileContent = fs.readFileSync(filePath, 'utf-8');
+      const fileData = JSON.parse(fileContent);
+
+      // Verify file contents match the returned version info
+      expect(fileData).toEqual(result);
+    }
+
+    // Verify writeFile was called for each output path
+    expect(realExecutor.writeFile).toHaveBeenCalledTimes(outputFilePaths.length);
+  });
+
   // The tests for generateAndWriteVersion with no outputFilePath and with outputFilePath are already covered above
 });
