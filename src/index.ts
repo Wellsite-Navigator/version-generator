@@ -508,7 +508,10 @@ export async function generateAndWriteVersion( //CLI Entry Point
 ): Promise<VersionInfo> {
   const executor = options.executor || defaultExecutor;
   // Normalize environment variables at the entry point
-  const env = normalizeEnvironment(options.env || process.env);
+  const env = normalizeEnvironment({
+    ...process.env,
+    ...(options.env || {}),
+  });
 
   // Generate the version
   const versionInfo = await generatePackageVersion(dir, {
