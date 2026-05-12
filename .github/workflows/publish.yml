@@ -3,7 +3,7 @@ name: Publish Package
 on:
   push:
     branches:
-      - '**'  # Matches all branches
+      - '**' # Matches all branches
   release:
     types: [created]
 
@@ -14,116 +14,92 @@ jobs:
   build-and-publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Needed for pushing tags
+      id-token: write # Required for npm OIDC trusted publishing
+      contents: write # Needed for pushing tags
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 1
           fetch-tags: true
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
-          version: 10.6.2
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build
         run: pnpm build
 
       - name: Test
         run: pnpm test
-        
+
       - name: Generate version
         id: generate-version
         run: |
-          # Run the CLI directly from the dist directory
           node dist/cli.js --format json > version_info.json
           cat version_info.json
-          
-          # Extract components from JSON
+
           VERSION=$(jq -r '.version' version_info.json)
           MAJOR=$(jq -r '.major' version_info.json)
           MINOR=$(jq -r '.minor' version_info.json)
           PATCH=$(jq -r '.patch' version_info.json)
           BRANCH=$(jq -r '.branchName' version_info.json)
           COMMIT=$(jq -r '.commitHash' version_info.json)
-          
-          # Set outputs for use in later steps
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "major=$MAJOR" >> $GITHUB_OUTPUT
           echo "minor=$MINOR" >> $GITHUB_OUTPUT
           echo "patch=$PATCH" >> $GITHUB_OUTPUT
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
           echo "commit=$COMMIT" >> $GITHUB_OUTPUT
-          
+
       - name: Prepare for publishing
         run: |
-          # Update the root package.json version
           echo "Updating package.json version to ${{ steps.generate-version.outputs.version }}"
           jq ".version = \"${{ steps.generate-version.outputs.version }}\"" package.json > package.json.tmp
           mv package.json.tmp package.json
 
       - name: Publish to npm registry
         run: |
-          # Publish from the root directory using the files specified in package.json
           echo "Publishing package"
-
-          # Use the branch name directly from the outputs
           BRANCH="${{ steps.generate-version.outputs.branch }}"
           echo "Branch name: $BRANCH"
 
-          # For main branch, publish with both 'latest' and branch-specific tags
           if [ "$BRANCH" = "main" ]; then
-            echo "Publishing with tags: latest, main"
-            # First publish with 'latest' tag
-            pnpm publish --access public --no-git-checks --tag latest
-            # Then add the 'main' tag to the same version
-            npm dist-tag add @wellsite/version-generator@${{ steps.generate-version.outputs.version }} main
+            echo "Publishing with tag: latest"
+            npm publish --tag latest
           else
-            # For other branches, just publish with the branch name as tag
             echo "Publishing with tag: $BRANCH"
-            pnpm publish --access public --no-git-checks --tag $BRANCH
+            npm publish --tag "$BRANCH"
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # This is required for pnpm to authenticate with the npm registry
-          
+
       - name: Reset package.json changes
         run: |
-          # Reset the package.json changes to avoid committing them
           echo "Resetting package.json changes"
           git checkout -- package.json
-          # No need to reset dist/package.json as it's not tracked by git
 
       - name: Create and push major version tag
         if: ${{ steps.generate-version.outputs.branch == 'main' }}
         run: |
-          # Extract major version component
           MAJOR_VERSION="v${{ steps.generate-version.outputs.major }}"
           echo "Creating major version tag: $MAJOR_VERSION"
-          
-          # Configure git
+
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          
-          # Create or force-update the major version tag to point to the current commit
-          echo "Creating or updating major version tag $MAJOR_VERSION"
+
           git tag -fa $MAJOR_VERSION -m "Latest release of major version $MAJOR_VERSION"
-          
-          # Set the remote URL with authentication token
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
-          
-          # Push the tag
-          # The -o flag adds a custom header to the push request to prevent triggering other workflows
+
           echo "Pushing major version tag"
           git push -f -o ci.skip origin $MAJOR_VERSION
